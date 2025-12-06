@@ -18,12 +18,19 @@ pub struct Content {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Part {
+    /// Regular text output from the model
     Text(String),
+    /// Thinking/reasoning content from thinking models (e.g., Gemini's thinking mode)
+    Thinking(String),
+    /// Function/tool call requested by the model
     FunctionCall {
         name: String,
         args: serde_json::Value,
+        /// Thought signature from Gemini thinking models - must be preserved and sent back
+        #[serde(skip_serializing_if = "Option::is_none")]
         thought_signature: Option<String>,
     },
+    /// Response from executing a function/tool
     FunctionResponse {
         name: String,
         response: serde_json::Value,

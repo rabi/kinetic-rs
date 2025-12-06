@@ -85,6 +85,18 @@
           "type": "string",
           "description": "System prompt/instructions for the agent"
         },
+        "executor": {
+          "type": "string",
+          "enum": ["default", "react", "cot"],
+          "default": "default",
+          "description": "Execution strategy: default (turn-based loop), react (Thought-Action-Observation pattern), cot (Chain-of-Thought prompting)"
+        },
+        "max_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "Maximum iterations for ReAct executor before returning"
+        },
         "model": {
           "$ref": "#/$defs/ModelDefinition"
         },
