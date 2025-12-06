@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Composite
+
+name: JiraProjectSummary
+
+description: |
+  A workflow that fetches all in-progress Jira issues assigned to you 
+  from a specific project, fetches linked GitHub PR status,
+  and summarizes everything into an actionable report.
+  
+  Usage: Provide a project key like "OSPRH"
+
+workflow:
+  execution: sequential
+  agents:
+    # Step 1: Fetch in-progress issues with full details (including comments, changelog, PR links)
+    - file: agents/jira_project_details_fetcher.yaml
+    
+    # Step 2: Fetch details for any linked GitHub PRs
+    - file: agents/jira_linked_prs_fetcher.yaml
+    
+    # Step 3: Compress data to essential information
+    - file: agents/context_compressor.yaml
+    
+    # Step 4: Analyze and summarize everything
+    - file: agents/jira_summarizer.yaml
+
+output:
+  type: text
+

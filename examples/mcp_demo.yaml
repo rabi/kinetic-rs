@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+name: "MCP Demo Workflow"
+description: "Demonstrates using tools from an MCP server"
+kind: "Direct"
+
+# Configure MCP servers to connect to
+mcp_servers:
+  - name: "everything"
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-everything"
+
+# Define the agent
+agent:
+  name: "MCPDemo"
+  description: "Agent that can use MCP tools"
+  instructions: |
+    You are a helpful assistant with access to tools from an MCP server.
+    Use the available tools to help users with their requests.
+  
+  model:
+    kind: llm
+  
+  # Reference MCP tools using the format: server_name:tool_name
+  # The @modelcontextprotocol/server-everything provides SQLite database tools
+  # Note: Tool schemas need format conversion for Gemini compatibility (known issue)
+  tools:
+    - "everything:list_tables"
+
+
+
+
+

@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Composite
+
+name: ParallelPRDataCollection
+
+stream: false
+
+description: "A parallel workflow that fetches PR metadata and diff concurrently (independent operations), then combines results."
+
+# Execution mode: "sequential" (default) or "parallel"
+# These workflows can run in parallel because they're independent - both just need the PR number from input
+
+workflow:
+  execution: parallel
+  agents:
+    # These two agents are independent - they both fetch different data from the same PR
+    # They can run concurrently since neither depends on the other's output
+    - file: agents/pr_metadata_fetcher.yaml
+    - file: agents/pr_diff_fetcher.yaml
+
+output:
+  type: text
+
+# Note: After parallel execution completes, you could add a sequential step to combine:
+# This would require a two-stage workflow:
+# Stage 1 (parallel): Fetch metadata + Fetch diff
+# Stage 2 (sequential): Combine results
+# For a complete example, see parallel_then_sequential_workflow.yaml
+

@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Direct
+
+name: PRDiffFetcher
+
+stream: false
+
+description: "Fetches only PR code diff from GitHub."
+
+agent:
+    name: PRDiffFetcher
+    description: "Fetches PR code diff showing actual code changes."
+    instructions: |
+      You are a PR diff fetcher. Your job is to:
+      1. Extract the PR number from the user's input
+      2. Call get_pull_request_diff with that PR number
+      3. Provide a summary of code changes:
+         - Which files were modified
+         - Key changes in each file
+         - Overall change patterns
+      
+      Be concise. Focus only on code changes, not metadata.
+    memory:
+      kind: sliding_window
+      parameters:
+        window_size: 50
+    model:
+      kind: llm
+      parameters:
+        temperature: 0.2
+        max_tokens: 3000
+    tools:
+      - get_pull_request_diff
+    output:
+      type: text
+
+output:
+  type: text
+

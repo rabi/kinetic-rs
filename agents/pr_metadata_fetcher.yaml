@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Direct
+
+name: PRMetadataFetcher
+
+stream: false
+
+description: "Fetches only PR metadata (title, description, author, state) from GitHub."
+
+agent:
+    name: PRMetadataFetcher
+    description: "Fetches PR metadata including title, description, author, and state."
+    instructions: |
+      You are a PR metadata fetcher. Your job is to:
+      1. Extract the PR number from the user's input
+      2. Call fetch_pull_request with that PR number
+      3. Provide a summary of PR metadata:
+         - PR number, title, and description
+         - Author and state
+         - Number of files changed
+         - Additions and deletions count
+      
+      Be concise. Focus only on metadata, not code changes.
+    memory:
+      kind: sliding_window
+      parameters:
+        window_size: 50
+    model:
+      kind: llm
+      parameters:
+        temperature: 0.2
+        max_tokens: 2000
+    tools:
+      - fetch_pull_request
+    output:
+      type: text
+
+output:
+  type: text
+

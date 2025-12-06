@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Direct
+
+name: PRCombiner
+
+stream: false
+
+description: "Combines outputs from multiple PR data fetchers into a comprehensive summary."
+
+agent:
+    name: PRCombiner
+    description: "Combines PR metadata and diff information into a comprehensive summary."
+    instructions: |
+      You are a PR data combiner. Your task is to combine information from multiple sources:
+      1. PR metadata (title, description, author, state, file counts)
+      2. PR code diff (actual code changes)
+      
+      Create a comprehensive summary that includes:
+      - Complete PR overview (metadata + code changes)
+      - File-by-file change summary
+      - Overall impact assessment
+      
+      Structure your output clearly, separating metadata from code changes.
+      Be thorough but organized.
+    memory:
+      kind: sliding_window
+      parameters:
+        window_size: 100
+    model:
+      kind: llm
+      parameters:
+        temperature: 0.2
+        max_tokens: 4000
+    tools: []  # No tools - combines outputs from previous agents
+    output:
+      type: text
+
+output:
+  type: text
+

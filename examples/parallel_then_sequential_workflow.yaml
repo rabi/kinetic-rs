@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Composite
+
+name: ParallelDataCollectionThenCombine
+
+stream: false
+
+description: "A two-stage workflow: first fetch PR data in parallel, then combine results sequentially."
+
+# Execution mode: "sequential" (default) or "parallel"
+# Sequential: agents/workflows execute one after another, output flows to next
+
+workflow:
+  execution: sequential
+  agents:
+    # Stage 1: Parallel data collection (nested workflow)
+    - file: examples/parallel_workflow.yaml
+    
+    # Stage 2: Combine the parallel results (agent definition)
+    - file: agents/pr_combiner.yaml
+
+output:
+  type: text
+

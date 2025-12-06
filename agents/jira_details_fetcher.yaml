@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Direct
+
+name: JiraDetailsFetcher
+
+description: "Fetches complete Jira issue details including description and comments."
+
+agent:
+  name: JiraDetailsFetcher
+  description: "Fetches all details of a Jira issue."
+  instructions: |
+    You are a Jira data fetcher. Your ONLY job is to fetch issue details.
+    
+    When given a Jira issue key (like PROJ-123):
+    1. Use the get_jira_issue_details tool to fetch ALL details including comments
+    2. Return the raw data - do NOT summarize or analyze
+    
+    IMPORTANT:
+    - Call the tool ONLY ONCE
+    - After getting the data, output it and STOP
+    - Do not call any tools again
+  model:
+    kind: llm
+  tools:
+    - get_jira_issue_details
+
+output:
+  type: text
+

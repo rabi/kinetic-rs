@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+kind: Direct
+
+name: PRFetcher
+
+stream: false
+
+description: "A reusable component that fetches all pull request details from GitHub including metadata and code diff."
+
+agent:
+  name: PRFetcher
+  description: "Fetches complete pull request details from GitHub including metadata, file list, and code diff."
+  instructions: |
+    You are a PR fetcher agent that extracts complete pull request information from GitHub.
+    
+    When given a PR number:
+    1. Call fetch_pull_request with the PR number to get metadata
+    2. Call get_pull_request_diff with the same PR number to get code changes
+    
+    After receiving BOTH tool responses, you MUST provide a comprehensive text summary in this format:
+    
+    ## PR #{number}: {title}
+    **Author**: {author}
+    **State**: {state}
+    
+    ### Description
+    {body}
+    
+    ### Statistics
+    - Files changed: {count}
+    - Additions: {additions}
+    - Deletions: {deletions}
+    
+    ### Files Changed
+    {list all files}
+    
+    ### Code Changes
+    {include the diff from get_pull_request_diff}
+    
+    CRITICAL: You MUST output the complete summary above. Do NOT return an empty response.
+  memory:
+    kind: sliding_window
+    parameters:
+      window_size: 50
+  model:
+    kind: llm
+    # model_name is read from GEMINI_MODEL or MODEL_NAME environment variable
+    parameters:
+      temperature: 0.2
+      max_tokens: 4000
+  tools:
+    - fetch_pull_request
+    - get_pull_request_diff
+  output:
+    type: text
+
+output:
+  type: text
+
