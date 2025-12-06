@@ -28,10 +28,14 @@ pub struct AgentDefinition {
     pub name: String,
     pub description: String,
     pub instructions: String,
+    /// Executor type: "default" (turn-based), "react" (Thought-Action-Observation), "cot" (Chain-of-Thought)
+    pub executor: Option<String>,
     pub model: ModelDefinition,
     pub tools: Vec<String>,
     pub memory: Option<MemoryDefinition>,
     pub workflow: Option<WorkflowReference>,
+    /// Maximum iterations for ReAct executor (default: 10)
+    pub max_iterations: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

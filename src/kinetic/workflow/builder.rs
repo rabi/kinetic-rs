@@ -1,4 +1,4 @@
-use crate::adk::agent::{Agent, LLMAgent, LoopAgent, ParallelAgent, SequentialAgent};
+use crate::adk::agent::{Agent, LLMAgent, LoopAgent, ParallelAgent, ReActAgent, SequentialAgent};
 use crate::adk::gemini::GeminiModel;
 use crate::adk::model::Model;
 use crate::adk::tool::Tool;
@@ -177,13 +177,45 @@ impl Builder {
             }
         }
 
-        Ok(Arc::new(LLMAgent::new(
-            def.name.clone(),
-            def.description.clone(),
-            def.instructions.clone(),
-            model,
-            tools,
-        )))
+        // Select agent type based on executor
+        let executor = def.executor.as_deref().unwrap_or("default");
+        log::info!("Building agent '{}' with executor '{}'", def.name, executor);
+
+        match executor {
+            "react" => {
+                let max_iterations = def.max_iterations.unwrap_or(10);
+                Ok(Arc::new(ReActAgent::new(
+                    def.name.clone(),
+                    def.description.clone(),
+                    def.instructions.clone(),
+                    model,
+                    tools,
+                    max_iterations,
+                )))
+            }
+            "cot" => {
+                // Chain-of-Thought: Use standard LLMAgent with CoT-specific instructions
+                // The user should include CoT prompting in their instructions
+                log::info!("Using Chain-of-Thought executor (standard agent with CoT prompting)");
+                Ok(Arc::new(LLMAgent::new(
+                    def.name.clone(),
+                    def.description.clone(),
+                    def.instructions.clone(),
+                    model,
+                    tools,
+                )))
+            }
+            _ => {
+                // Default turn-based agent
+                Ok(Arc::new(LLMAgent::new(
+                    def.name.clone(),
+                    def.description.clone(),
+                    def.instructions.clone(),
+                    model,
+                    tools,
+                )))
+            }
+        }
     }
 
     async fn initialize_mcp_server(
