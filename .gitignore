@@ -1,0 +1,21 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Environment and secrets
+.env
+
+# IDE and editor files
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.log
+
+# Debug files
+*.pdb
+
