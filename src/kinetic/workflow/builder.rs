@@ -229,3 +229,155 @@ impl Builder {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kinetic::workflow::loader::CompositeWorkflowDefinition;
+
+    // === Provider Inference Tests ===
+
+    #[test]
+    fn test_infer_provider_gemini() {
+        assert_eq!(Builder::infer_provider_from_model("gemini-2.0-flash"), "Gemini");
+        assert_eq!(Builder::infer_provider_from_model("gemini-1.5-pro"), "Gemini");
+        assert_eq!(Builder::infer_provider_from_model("Gemini-2.0-Flash"), "Gemini");
+        assert_eq!(Builder::infer_provider_from_model("models/gemini-2.0-flash"), "Gemini");
+    }
+
+    #[test]
+    fn test_infer_provider_openai() {
+        assert_eq!(Builder::infer_provider_from_model("gpt-4"), "OpenAI");
+        assert_eq!(Builder::infer_provider_from_model("gpt-4o"), "OpenAI");
+        assert_eq!(Builder::infer_provider_from_model("gpt-3.5-turbo"), "OpenAI");
+        assert_eq!(Builder::infer_provider_from_model("GPT-4"), "OpenAI");
+        assert_eq!(Builder::infer_provider_from_model("o1-preview"), "OpenAI");
+        assert_eq!(Builder::infer_provider_from_model("o1-mini"), "OpenAI");
+    }
+
+    #[test]
+    fn test_infer_provider_anthropic() {
+        assert_eq!(Builder::infer_provider_from_model("claude-3-opus"), "Anthropic");
+        assert_eq!(Builder::infer_provider_from_model("claude-3-sonnet"), "Anthropic");
+        assert_eq!(Builder::infer_provider_from_model("Claude-3.5-Sonnet"), "Anthropic");
+    }
+
+    #[test]
+    fn test_infer_provider_deepseek() {
+        assert_eq!(Builder::infer_provider_from_model("deepseek-chat"), "DeepSeek");
+        assert_eq!(Builder::infer_provider_from_model("deepseek-coder"), "DeepSeek");
+        assert_eq!(Builder::infer_provider_from_model("DeepSeek-V2"), "DeepSeek");
+    }
+
+    #[test]
+    fn test_infer_provider_unknown_defaults_to_gemini() {
+        assert_eq!(Builder::infer_provider_from_model("unknown-model"), "Gemini");
+        assert_eq!(Builder::infer_provider_from_model("my-custom-model"), "Gemini");
+        assert_eq!(Builder::infer_provider_from_model(""), "Gemini");
+    }
+
+    // === Workflow Definition Validation Tests ===
+
+    #[tokio::test]
+    async fn test_direct_workflow_missing_agent_returns_error() {
+        let registry = ToolRegistry::new();
+        let mcp_manager = Arc::new(McpServiceManager::new());
+        let builder = Builder::new(registry, mcp_manager);
+
+        let def = WorkflowDefinition {
+            name: "Test".to_string(),
+            description: "Test".to_string(),
+            kind: "Direct".to_string(),
+            agent: None, // Missing agent!
+            workflow: None,
+            overrides: None,
+            mcp_servers: vec![],
+        };
+
+        let result = builder.build_from_def(&def).await;
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert!(err.to_string().contains("missing agent"));
+    }
+
+    #[tokio::test]
+    async fn test_composite_workflow_missing_workflow_returns_error() {
+        let registry = ToolRegistry::new();
+        let mcp_manager = Arc::new(McpServiceManager::new());
+        let builder = Builder::new(registry, mcp_manager);
+
+        let def = WorkflowDefinition {
+            name: "Test".to_string(),
+            description: "Test".to_string(),
+            kind: "Composite".to_string(),
+            agent: None,
+            workflow: None, // Missing workflow!
+            overrides: None,
+            mcp_servers: vec![],
+        };
+
+        let result = builder.build_from_def(&def).await;
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert!(err.to_string().contains("missing workflow"));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_workflow_kind_returns_error() {
+        let registry = ToolRegistry::new();
+        let mcp_manager = Arc::new(McpServiceManager::new());
+        let builder = Builder::new(registry, mcp_manager);
+
+        let def = WorkflowDefinition {
+            name: "Test".to_string(),
+            description: "Test".to_string(),
+            kind: "InvalidKind".to_string(),
+            agent: None,
+            workflow: None,
+            overrides: None,
+            mcp_servers: vec![],
+        };
+
+        let result = builder.build_from_def(&def).await;
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert!(err.to_string().contains("Unknown workflow kind"));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_execution_mode_returns_error() {
+        let registry = ToolRegistry::new();
+        let mcp_manager = Arc::new(McpServiceManager::new());
+        let builder = Builder::new(registry, mcp_manager);
+
+        let def = WorkflowDefinition {
+            name: "Test".to_string(),
+            description: "Test".to_string(),
+            kind: "Composite".to_string(),
+            agent: None,
+            workflow: Some(CompositeWorkflowDefinition {
+                execution: "invalid_mode".to_string(),
+                agents: vec![],
+                max_iterations: None,
+            }),
+            overrides: None,
+            mcp_servers: vec![],
+        };
+
+        let result = builder.build_from_def(&def).await;
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert!(err.to_string().contains("Unknown execution mode"));
+    }
+
+    #[test]
+    fn test_builder_new() {
+        let registry = ToolRegistry::new();
+        let mcp_manager = Arc::new(McpServiceManager::new());
+        let _builder = Builder::new(registry, mcp_manager);
+        // Just verify it doesn't panic
+    }
+
+    // Note: Testing build_llm_agent requires mocking GeminiModel which needs an API key.
+    // Those are better suited for integration tests with actual YAML files.
+}

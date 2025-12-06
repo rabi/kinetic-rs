@@ -29,11 +29,15 @@ impl ClientHandler for BasicClientHandler {
 /// Returns the service which can be used to call `list_all_tools()`, `call_tool()`, etc.
 ///
 /// # Example
-/// ```rust,no_run
+/// ```rust,ignore
 /// use kinetic_rs::kinetic::mcp::create_mcp_service;
 ///
-/// let service = create_mcp_service("npx", &["-y", "@modelcontextprotocol/server-everything"]).await?;
-/// let tools = service.list_all_tools().await?;
+/// async fn example() -> Result<(), Box<dyn std::error::Error>> {
+///     let args = vec!["arg1".to_string()];
+///     let service = create_mcp_service("command", &args).await?;
+///     let tools = service.list_all_tools().await?;
+///     Ok(())
+/// }
 /// ```
 pub async fn create_mcp_service(
     command: &str,

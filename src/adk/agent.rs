@@ -264,3 +264,122 @@ impl Agent for LoopAgent {
         Ok(current_input)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A simple mock agent that transforms input
+    struct MockAgent {
+        name: String,
+        transform: fn(String) -> String,
+    }
+
+    impl MockAgent {
+        fn new(name: &str, transform: fn(String) -> String) -> Self {
+            Self {
+                name: name.to_string(),
+                transform,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Agent for MockAgent {
+        fn name(&self) -> String {
+            self.name.clone()
+        }
+
+        async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
+            Ok((self.transform)(input))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_sequential_agent_chains_output() {
+        let agent1 = Arc::new(MockAgent::new("agent1", |s| format!("{}-step1", s)));
+        let agent2 = Arc::new(MockAgent::new("agent2", |s| format!("{}-step2", s)));
+        let agent3 = Arc::new(MockAgent::new("agent3", |s| format!("{}-step3", s)));
+
+        let seq = SequentialAgent::new(
+            "sequential".to_string(),
+            "test".to_string(),
+            vec![agent1, agent2, agent3],
+        );
+
+        let result = seq.run("input".to_string()).await.unwrap();
+        assert_eq!(result, "input-step1-step2-step3");
+    }
+
+    #[tokio::test]
+    async fn test_sequential_agent_empty() {
+        let seq = SequentialAgent::new(
+            "empty".to_string(),
+            "test".to_string(),
+            vec![],
+        );
+
+        let result = seq.run("input".to_string()).await.unwrap();
+        assert_eq!(result, "input");
+    }
+
+    #[tokio::test]
+    async fn test_parallel_agent_combines_output() {
+        let agent1 = Arc::new(MockAgent::new("agent1", |_| "result1".to_string()));
+        let agent2 = Arc::new(MockAgent::new("agent2", |_| "result2".to_string()));
+
+        let parallel = ParallelAgent::new(
+            "parallel".to_string(),
+            "test".to_string(),
+            vec![agent1, agent2],
+        );
+
+        let result = parallel.run("input".to_string()).await.unwrap();
+        // Results are joined with \n---\n
+        assert!(result.contains("result1"));
+        assert!(result.contains("result2"));
+        assert!(result.contains("---"));
+    }
+
+    #[tokio::test]
+    async fn test_loop_agent_iterates() {
+        let agent = Arc::new(MockAgent::new("appender", |s| format!("{}-iter", s)));
+
+        let loop_agent = LoopAgent::new(
+            "loop".to_string(),
+            "test".to_string(),
+            agent,
+            3,
+        );
+
+        let result = loop_agent.run("start".to_string()).await.unwrap();
+        assert_eq!(result, "start-iter-iter-iter");
+    }
+
+    #[tokio::test]
+    async fn test_loop_agent_zero_iterations() {
+        let agent = Arc::new(MockAgent::new("agent", |s| format!("{}-iter", s)));
+
+        let loop_agent = LoopAgent::new(
+            "loop".to_string(),
+            "test".to_string(),
+            agent,
+            0,
+        );
+
+        let result = loop_agent.run("input".to_string()).await.unwrap();
+        assert_eq!(result, "input"); // No iterations, returns original input
+    }
+
+    #[tokio::test]
+    async fn test_agent_names() {
+        let mock = MockAgent::new("test_name", |s| s);
+        assert_eq!(mock.name(), "test_name");
+
+        let seq = SequentialAgent::new("seq_name".to_string(), "desc".to_string(), vec![]);
+        assert_eq!(seq.name(), "seq_name");
+
+        let parallel = ParallelAgent::new("par_name".to_string(), "desc".to_string(), vec![]);
+        assert_eq!(parallel.name(), "par_name");
+    }
+}
