@@ -10,16 +10,16 @@ agent:
   description: "Fetches in-progress issues with full details."
   instructions: |
     You are a Jira data fetcher. Your job is to fetch all in-progress issues with full details.
-    
+
     The user will provide a PROJECT KEY (like "OSPRH").
-    
+
     Step 1: Call get_my_project_issues with the project_key to get the list of issues.
-    
-    Step 2: For EACH issue returned, call get_jira_issue_details with the issue_key 
+
+    Step 2: For EACH issue returned, call get_jira_issue with the issue_key
     to get full details including description and comments.
-    
+
     Step 3: Output ALL the detailed data in a structured format.
-    
+
     IMPORTANT:
     - First get the list, then get details for each issue
     - Include ALL comments and descriptions in your output
@@ -28,7 +28,7 @@ agent:
     kind: llm
   tools:
     - get_my_project_issues
-    - get_jira_issue_details
+    - get_jira_issue
 
 output:
   type: text

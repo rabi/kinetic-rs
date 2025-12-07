@@ -1,0 +1,96 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+#
+# Graph Workflow Example: Intent Router
+#
+# This workflow demonstrates the graph execution model:
+# 1. A classifier node analyzes the input and outputs intent
+# 2. Conditional nodes run based on the classified intent
+#
+# Run with: cargo run -- workflow --file examples/graph_intent_router.yaml --input "How do I sort a list in Python?"
+
+kind: Graph
+name: IntentRouter
+description: "Routes queries based on classified intent"
+
+graph:
+  state:
+    intent:
+      type: string
+    confidence:
+      type: number
+    result:
+      type: string
+
+  nodes:
+    # Entry node - classifies the intent
+    - id: classify
+      agent:
+        name: Classifier
+        description: "Classifies user query intent"
+        instructions: |
+          Analyze the user's query and classify its intent.
+
+          Output ONLY valid JSON in this exact format:
+          {"intent": "code", "confidence": 0.95}
+
+          Intent must be one of:
+          - "code" - questions about programming, coding, algorithms
+          - "search" - general knowledge questions, facts
+          - "chat" - casual conversation, greetings
+
+          Confidence should be between 0.0 and 1.0.
+        model:
+          kind: llm
+        tools: []
+      outputs:
+        intent: "intent"
+        confidence: "confidence"
+
+    # Code questions handler
+    - id: code_handler
+      depends_on: classify
+      when: "intent == 'code'"
+      agent:
+        name: CodeExpert
+        description: "Answers programming questions"
+        instructions: |
+          You are an expert programmer. Answer the coding question clearly
+          with examples when appropriate. Be concise but thorough.
+        model:
+          kind: llm
+        tools: []
+      outputs:
+        result: "answer"
+
+    # General search/knowledge handler
+    - id: search_handler
+      depends_on: classify
+      when: "intent == 'search'"
+      agent:
+        name: KnowledgeExpert
+        description: "Answers general knowledge questions"
+        instructions: |
+          Answer the question based on your knowledge.
+          Provide accurate, helpful information.
+        model:
+          kind: llm
+        tools: []
+      outputs:
+        result: "answer"
+
+    # Chat/casual conversation handler
+    - id: chat_handler
+      depends_on: classify
+      when: "intent == 'chat'"
+      agent:
+        name: ChatAgent
+        description: "Handles casual conversation"
+        instructions: |
+          Respond to the user in a friendly, conversational manner.
+          Keep responses brief and engaging.
+        model:
+          kind: llm
+        tools: []
+      outputs:
+        result: "answer"
+

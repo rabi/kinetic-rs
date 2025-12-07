@@ -6,7 +6,7 @@ name: JiraSummary
 description: |
   A workflow that fetches complete Jira issue details (including comments)
   and then summarizes them into an actionable report.
-  
+
   Usage: Provide a Jira issue key like "PROJ-123"
 
 workflow:
@@ -14,7 +14,7 @@ workflow:
   agents:
     # Step 1: Fetch all issue details including comments
     - file: agents/jira_details_fetcher.yaml
-    
+
     # Step 2: Analyze and summarize the data
     - file: agents/jira_summarizer.yaml
 

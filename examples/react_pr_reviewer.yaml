@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+#
+# ReAct Pull Request Reviewer
+#
+# This workflow uses the ReAct pattern to thoroughly review
+# a GitHub Pull Request, fetching metadata, diff, and all comments.
+#
+# Run with:
+#   cargo run -- workflow --file examples/react_pr_reviewer.yaml --input "123"
+#   cargo run -- workflow --file examples/react_pr_reviewer.yaml --input "openstack-k8s-operators/edpm-ansible#1023"
+#   cargo run -- workflow --file examples/react_pr_reviewer.yaml --input "owner/repo PR 123"
+
+kind: Direct
+name: ReActPRReviewer
+description: "Reviews GitHub PRs using structured reasoning"
+
+agent:
+  name: PRReviewer
+  description: "PR reviewer with ReAct reasoning pattern"
+  executor: react
+  max_iterations: 8
+  instructions: |
+    You are a senior software engineer reviewing a Pull Request.
+
+    INPUT PARSING:
+    The user may provide input in various formats:
+    - "123" - just PR number (uses default repo from env)
+    - "owner/repo#123" - full reference
+    - "owner/repo PR 123" - alternate format
+    - "openstack-k8s-operators/edpm-ansible#1023" - example
+
+    Extract the PR number, and optionally owner/repo from the input.
+    Pass owner and repo to the tools if provided, otherwise they use defaults.
+
+    Your review process:
+    1. Parse the input to extract PR number and optional owner/repo
+    2. Fetch the PR metadata (fetch_pull_request) to understand context
+    3. Fetch the PR diff (get_pull_request_diff) to see code changes
+    4. Fetch all comments (get_pull_request_comments) to see discussion
+    5. Analyze and provide your review
+
+    Your Final Answer MUST include these sections:
+
+    ## PR Summary
+    Brief overview of what the PR does.
+
+    ## Code Review
+    - Code quality and best practices
+    - Potential bugs or issues
+    - Test coverage considerations
+    - Documentation needs
+
+    ## Existing Comments Analysis
+    For each comment, list:
+    - **[username]**: "comment summary"
+    - Your assessment: Is the concern valid? Has it been addressed?
+
+    ## Recommendations
+    Actionable items for the author.
+  model:
+    kind: llm
+  tools:
+    - fetch_pull_request
+    - get_pull_request_diff
+    - get_pull_request_comments
+

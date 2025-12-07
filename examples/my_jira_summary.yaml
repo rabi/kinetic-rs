@@ -6,7 +6,7 @@ name: MyJiraSummary
 description: |
   Fetches ALL your in-progress Jira issues (across all projects)
   and summarizes them into an actionable overview.
-  
+
   Usage: Just run it - no input needed!
 
 workflow:
@@ -14,7 +14,7 @@ workflow:
   agents:
     # Step 1: Fetch all in-progress issues assigned to you
     - file: agents/jira_all_assigned_fetcher.yaml
-    
+
     # Step 2: Summarize all the issues
     - file: agents/jira_list_summarizer.yaml
 

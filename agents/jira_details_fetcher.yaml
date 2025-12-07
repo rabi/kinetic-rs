@@ -10,11 +10,11 @@ agent:
   description: "Fetches all details of a Jira issue."
   instructions: |
     You are a Jira data fetcher. Your ONLY job is to fetch issue details.
-    
+
     When given a Jira issue key (like PROJ-123):
-    1. Use the get_jira_issue_details tool to fetch ALL details including comments
+    1. Use the get_jira_issue tool to fetch ALL details including comments
     2. Return the raw data - do NOT summarize or analyze
-    
+
     IMPORTANT:
     - Call the tool ONLY ONCE
     - After getting the data, output it and STOP
@@ -22,7 +22,7 @@ agent:
   model:
     kind: llm
   tools:
-    - get_jira_issue_details
+    - get_jira_issue
 
 output:
   type: text

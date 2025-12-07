@@ -101,7 +101,10 @@ impl Agent for LLMAgent {
 
             if function_calls.is_empty() {
                 // No text and no function calls - this is unexpected
-                log::warn!("Agent {} received empty response with no function calls", self.name);
+                log::warn!(
+                    "Agent {} received empty response with no function calls",
+                    self.name
+                );
                 return Ok(String::new());
             }
 
@@ -109,7 +112,7 @@ impl Agent for LLMAgent {
             let mut function_responses = Vec::new();
             for (name, args) in function_calls {
                 log::info!("Tool call: {} {:?}", name, args);
-                
+
                 let tool = self.tools.iter().find(|t| t.name() == name);
                 let tool_response = if let Some(t) = tool {
                     match t.execute(args.clone()).await {
@@ -266,7 +269,7 @@ impl Agent for LoopAgent {
 }
 
 /// ReAct (Reasoning + Acting) Agent
-/// 
+///
 /// Implements the ReAct pattern where the agent explicitly reasons about
 /// what to do, takes actions (tool calls), and observes the results in
 /// a structured Thought → Action → Observation loop.
@@ -285,7 +288,10 @@ enum ReActStep {
     /// Model is thinking/reasoning
     Thought(String),
     /// Model wants to call a tool
-    Action { tool: String, args: serde_json::Value },
+    Action {
+        tool: String,
+        args: serde_json::Value,
+    },
     /// Model has a final answer
     FinalAnswer(String),
 }
@@ -337,8 +343,7 @@ Response format:
 - To provide a final answer, respond with text starting with "Final Answer:" followed by your answer
 
 Always think step by step. After receiving tool results (Observations), continue reasoning until you can provide a final answer."#,
-            self.instruction,
-            tool_section
+            self.instruction, tool_section
         )
     }
 
@@ -400,7 +405,7 @@ Always think step by step. After receiving tool results (Observations), continue
         args: serde_json::Value,
     ) -> Result<String, Box<dyn Error + Send + Sync>> {
         let tool = self.tools.iter().find(|t| t.name() == tool_name);
-        
+
         if let Some(t) = tool {
             match t.execute(args).await {
                 Ok(result) => Ok(serde_json::to_string_pretty(&result).unwrap_or_default()),
@@ -432,7 +437,7 @@ impl Agent for ReActAgent {
 
             // Build conversation with current scratchpad
             let current_prompt = self.build_prompt_with_scratchpad(&input, &scratchpad);
-            
+
             let history = vec![
                 Content {
                     role: "system".to_string(),
@@ -464,7 +469,7 @@ impl Agent for ReActAgent {
                 ReActStep::Action { tool, args } => {
                     scratchpad.push(format!("Action: {}({})", tool, args));
                     log::info!("Action: {}({})", tool, args);
-                    
+
                     // Execute the tool
                     let observation = self.execute_tool(&tool, args).await?;
                     scratchpad.push(format!("Observation: {}", observation));
@@ -483,7 +488,7 @@ impl Agent for ReActAgent {
             self.name,
             self.max_iterations
         );
-        
+
         // Return the last meaningful content from scratchpad
         let summary = format!(
             "Reached maximum iterations. Here's what I found:\n\n{}",
@@ -541,11 +546,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sequential_agent_empty() {
-        let seq = SequentialAgent::new(
-            "empty".to_string(),
-            "test".to_string(),
-            vec![],
-        );
+        let seq = SequentialAgent::new("empty".to_string(), "test".to_string(), vec![]);
 
         let result = seq.run("input".to_string()).await.unwrap();
         assert_eq!(result, "input");
@@ -573,12 +574,7 @@ mod tests {
     async fn test_loop_agent_iterates() {
         let agent = Arc::new(MockAgent::new("appender", |s| format!("{}-iter", s)));
 
-        let loop_agent = LoopAgent::new(
-            "loop".to_string(),
-            "test".to_string(),
-            agent,
-            3,
-        );
+        let loop_agent = LoopAgent::new("loop".to_string(), "test".to_string(), agent, 3);
 
         let result = loop_agent.run("start".to_string()).await.unwrap();
         assert_eq!(result, "start-iter-iter-iter");
@@ -588,12 +584,7 @@ mod tests {
     async fn test_loop_agent_zero_iterations() {
         let agent = Arc::new(MockAgent::new("agent", |s| format!("{}-iter", s)));
 
-        let loop_agent = LoopAgent::new(
-            "loop".to_string(),
-            "test".to_string(),
-            agent,
-            0,
-        );
+        let loop_agent = LoopAgent::new("loop".to_string(), "test".to_string(), agent, 0);
 
         let result = loop_agent.run("input".to_string()).await.unwrap();
         assert_eq!(result, "input"); // No iterations, returns original input
@@ -657,18 +648,27 @@ mod tests {
 
     impl MockTool {
         fn new(name: &str) -> Self {
-            Self { name: name.to_string() }
+            Self {
+                name: name.to_string(),
+            }
         }
     }
 
     #[async_trait]
     impl Tool for MockTool {
-        fn name(&self) -> String { self.name.clone() }
-        fn description(&self) -> String { format!("Mock tool: {}", self.name) }
+        fn name(&self) -> String {
+            self.name.clone()
+        }
+        fn description(&self) -> String {
+            format!("Mock tool: {}", self.name)
+        }
         fn schema(&self) -> serde_json::Value {
             json!({"type": "object", "properties": {"query": {"type": "string"}}})
         }
-        async fn execute(&self, args: serde_json::Value) -> Result<serde_json::Value, Box<dyn Error + Send + Sync>> {
+        async fn execute(
+            &self,
+            args: serde_json::Value,
+        ) -> Result<serde_json::Value, Box<dyn Error + Send + Sync>> {
             Ok(json!({"result": format!("Mock result for {} with args: {}", self.name, args)}))
         }
     }
@@ -676,7 +676,14 @@ mod tests {
     #[test]
     fn test_react_parse_final_answer() {
         let model = Arc::new(MockModel::new(vec![]));
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, vec![], 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            vec![],
+            10,
+        );
 
         let response = Content {
             role: "model".to_string(),
@@ -691,14 +698,25 @@ mod tests {
     #[test]
     fn test_react_parse_thought() {
         let model = Arc::new(MockModel::new(vec![]));
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, vec![], 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            vec![],
+            10,
+        );
 
         let response = Content {
             role: "model".to_string(),
-            parts: vec![Part::Text("I need to search for more information".to_string())],
+            parts: vec![Part::Text(
+                "I need to search for more information".to_string(),
+            )],
         };
         match agent.parse_response(&response) {
-            ReActStep::Thought(thought) => assert_eq!(thought, "I need to search for more information"),
+            ReActStep::Thought(thought) => {
+                assert_eq!(thought, "I need to search for more information")
+            }
             _ => panic!("Expected Thought"),
         }
     }
@@ -706,11 +724,20 @@ mod tests {
     #[test]
     fn test_react_parse_thinking_part() {
         let model = Arc::new(MockModel::new(vec![]));
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, vec![], 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            vec![],
+            10,
+        );
 
         let response = Content {
             role: "model".to_string(),
-            parts: vec![Part::Thinking("Deep reasoning about the problem".to_string())],
+            parts: vec![Part::Thinking(
+                "Deep reasoning about the problem".to_string(),
+            )],
         };
         match agent.parse_response(&response) {
             ReActStep::Thought(thought) => assert_eq!(thought, "Deep reasoning about the problem"),
@@ -721,11 +748,22 @@ mod tests {
     #[test]
     fn test_react_parse_function_call() {
         let model = Arc::new(MockModel::new(vec![]));
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, vec![], 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            vec![],
+            10,
+        );
 
         let response = Content {
             role: "model".to_string(),
-            parts: vec![Part::FunctionCall { name: "search".to_string(), args: json!({"query": "rust"}), thought_signature: None }],
+            parts: vec![Part::FunctionCall {
+                name: "search".to_string(),
+                args: json!({"query": "rust"}),
+                thought_signature: None,
+            }],
         };
         match agent.parse_response(&response) {
             ReActStep::Action { tool, args } => {
@@ -739,13 +777,26 @@ mod tests {
     #[test]
     fn test_react_build_scratchpad_prompt() {
         let model = Arc::new(MockModel::new(vec![]));
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, vec![], 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            vec![],
+            10,
+        );
 
         // Empty scratchpad
-        assert_eq!(agent.build_prompt_with_scratchpad("What is 2+2?", &[]), "What is 2+2?");
+        assert_eq!(
+            agent.build_prompt_with_scratchpad("What is 2+2?", &[]),
+            "What is 2+2?"
+        );
 
         // With scratchpad
-        let scratchpad = vec!["Thought: I need to calculate".to_string(), "Observation: 4".to_string()];
+        let scratchpad = vec![
+            "Thought: I need to calculate".to_string(),
+            "Observation: 4".to_string(),
+        ];
         let prompt = agent.build_prompt_with_scratchpad("What is 2+2?", &scratchpad);
         assert!(prompt.contains("Previous Steps"));
         assert!(prompt.contains("Thought: I need to calculate"));
@@ -754,8 +805,18 @@ mod tests {
     #[test]
     fn test_react_system_prompt_includes_tools() {
         let model = Arc::new(MockModel::new(vec![]));
-        let tools: Vec<Arc<dyn Tool>> = vec![Arc::new(MockTool::new("search")), Arc::new(MockTool::new("calc"))];
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "You are helpful".to_string(), model, tools, 10);
+        let tools: Vec<Arc<dyn Tool>> = vec![
+            Arc::new(MockTool::new("search")),
+            Arc::new(MockTool::new("calc")),
+        ];
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "You are helpful".to_string(),
+            model,
+            tools,
+            10,
+        );
 
         let prompt = agent.build_react_system_prompt();
         assert!(prompt.contains("ReAct"));
@@ -769,7 +830,14 @@ mod tests {
             role: "model".to_string(),
             parts: vec![Part::Text("Final Answer: 42".to_string())],
         }]));
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, vec![], 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            vec![],
+            10,
+        );
 
         let result = agent.run("What?".to_string()).await.unwrap();
         assert_eq!(result, "42");
@@ -778,12 +846,29 @@ mod tests {
     #[tokio::test]
     async fn test_react_agent_with_tool_call() {
         let responses = vec![
-            Content { role: "model".to_string(), parts: vec![Part::FunctionCall { name: "search".to_string(), args: json!({"q": "test"}), thought_signature: None }] },
-            Content { role: "model".to_string(), parts: vec![Part::Text("Final Answer: Found it".to_string())] },
+            Content {
+                role: "model".to_string(),
+                parts: vec![Part::FunctionCall {
+                    name: "search".to_string(),
+                    args: json!({"q": "test"}),
+                    thought_signature: None,
+                }],
+            },
+            Content {
+                role: "model".to_string(),
+                parts: vec![Part::Text("Final Answer: Found it".to_string())],
+            },
         ];
         let model = Arc::new(MockModel::new(responses));
         let tools: Vec<Arc<dyn Tool>> = vec![Arc::new(MockTool::new("search"))];
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, tools, 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            tools,
+            10,
+        );
 
         let result = agent.run("Search".to_string()).await.unwrap();
         assert_eq!(result, "Found it");
@@ -792,11 +877,27 @@ mod tests {
     #[tokio::test]
     async fn test_react_agent_max_iterations() {
         let model = Arc::new(MockModel::new(vec![
-            Content { role: "model".to_string(), parts: vec![Part::Text("Thinking...".to_string())] },
-            Content { role: "model".to_string(), parts: vec![Part::Text("Still thinking...".to_string())] },
-            Content { role: "model".to_string(), parts: vec![Part::Text("More...".to_string())] },
+            Content {
+                role: "model".to_string(),
+                parts: vec![Part::Text("Thinking...".to_string())],
+            },
+            Content {
+                role: "model".to_string(),
+                parts: vec![Part::Text("Still thinking...".to_string())],
+            },
+            Content {
+                role: "model".to_string(),
+                parts: vec![Part::Text("More...".to_string())],
+            },
         ]));
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, vec![], 3);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            vec![],
+            3,
+        );
 
         let result = agent.run("Think".to_string()).await.unwrap();
         assert!(result.contains("Reached maximum iterations"));
@@ -806,9 +907,19 @@ mod tests {
     async fn test_react_execute_tool() {
         let model = Arc::new(MockModel::new(vec![]));
         let tools: Vec<Arc<dyn Tool>> = vec![Arc::new(MockTool::new("test_tool"))];
-        let agent = ReActAgent::new("test".to_string(), "test".to_string(), "test".to_string(), model, tools, 10);
+        let agent = ReActAgent::new(
+            "test".to_string(),
+            "test".to_string(),
+            "test".to_string(),
+            model,
+            tools,
+            10,
+        );
 
-        let result = agent.execute_tool("test_tool", json!({"x": 1})).await.unwrap();
+        let result = agent
+            .execute_tool("test_tool", json!({"x": 1}))
+            .await
+            .unwrap();
         assert!(result.contains("Mock result"));
 
         let result = agent.execute_tool("nonexistent", json!({})).await.unwrap();

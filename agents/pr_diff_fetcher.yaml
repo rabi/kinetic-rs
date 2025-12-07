@@ -18,7 +18,7 @@ agent:
          - Which files were modified
          - Key changes in each file
          - Overall change patterns
-      
+
       Be concise. Focus only on code changes, not metadata.
     memory:
       kind: sliding_window

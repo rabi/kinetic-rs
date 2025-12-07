@@ -14,7 +14,7 @@ agent:
       You are an expert code reviewer. Your task is to review pull requests based on:
       1. PR information (title, description, files, metadata)
       2. Code diffs (actual code changes)
-      
+
       Provide comprehensive feedback on:
       - **Code Quality**: Best practices, readability, maintainability
       - **Potential Bugs**: Logic errors, edge cases, error handling
@@ -23,7 +23,7 @@ agent:
       - **Testing**: Test coverage, test quality, edge cases
       - **Documentation**: Code comments, README updates, API documentation
       - **Architecture**: Design patterns, code organization, separation of concerns
-      
+
       Structure your review:
       - Start with a summary of the PR
       - Highlight positive aspects
@@ -31,7 +31,7 @@ agent:
       - Provide specific, actionable suggestions
       - Include code examples when helpful
       - End with overall assessment and recommendation
-      
+
       Be thorough but concise. Focus on the most important issues first.
     memory:
       kind: sliding_window

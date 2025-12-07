@@ -12,6 +12,10 @@ use std::sync::Arc;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FetchPRArgs {
     pub pr_number: u64,
+    /// Optional owner/org - falls back to GITHUB_ORG env var
+    pub owner: Option<String>,
+    /// Optional repo name - falls back to GITHUB_REPO env var
+    pub repo: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,7 +53,7 @@ impl Tool for FetchPRTool {
     }
 
     fn description(&self) -> String {
-        "Fetches a pull request by number. Returns PR details including title, body, description, and changed files.".to_string()
+        "Fetches a pull request by number. Returns PR details including title, body, description, and changed files. Can optionally specify owner/repo.".to_string()
     }
 
     fn schema(&self) -> Value {
@@ -59,6 +63,14 @@ impl Tool for FetchPRTool {
                 "pr_number": {
                     "type": "integer",
                     "description": "The pull request number"
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Repository owner/org (optional, defaults to GITHUB_ORG env var)"
+                },
+                "repo": {
+                    "type": "string",
+                    "description": "Repository name (optional, defaults to GITHUB_REPO env var)"
                 }
             },
             "required": ["pr_number"]
@@ -68,14 +80,14 @@ impl Tool for FetchPRTool {
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let args: FetchPRArgs = serde_json::from_value(input)?;
 
-        let pr = self
-            .octocrab
-            .pulls(&self.owner, &self.repo)
-            .get(args.pr_number)
-            .await?;
+        // Use provided owner/repo or fall back to defaults
+        let owner = args.owner.as_ref().unwrap_or(&self.owner);
+        let repo = args.repo.as_ref().unwrap_or(&self.repo);
+
+        let pr = self.octocrab.pulls(owner, repo).get(args.pr_number).await?;
         let files = self
             .octocrab
-            .pulls(&self.owner, &self.repo)
+            .pulls(owner, repo)
             .list_files(args.pr_number)
             .await?;
 
@@ -107,6 +119,8 @@ impl Tool for FetchPRTool {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetDiffArgs {
     pub pr_number: u64,
+    pub owner: Option<String>,
+    pub repo: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -137,7 +151,7 @@ impl Tool for GetDiffTool {
     }
 
     fn description(&self) -> String {
-        "Gets the full diff for a pull request showing all code changes.".to_string()
+        "Gets the full diff for a pull request showing all code changes. Can optionally specify owner/repo.".to_string()
     }
 
     fn schema(&self) -> Value {
@@ -147,6 +161,14 @@ impl Tool for GetDiffTool {
                 "pr_number": {
                     "type": "integer",
                     "description": "The pull request number"
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Repository owner/org (optional)"
+                },
+                "repo": {
+                    "type": "string",
+                    "description": "Repository name (optional)"
                 }
             },
             "required": ["pr_number"]
@@ -156,13 +178,12 @@ impl Tool for GetDiffTool {
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let args: GetDiffArgs = serde_json::from_value(input)?;
 
-        // Octocrab doesn't have a direct "get diff" method that returns the raw diff string easily for PRs in the high-level API
-        // But we can use the media type header to request diff
-        // Or just list files and get patches. The Go implementation lists files and concatenates patches.
+        let owner = args.owner.as_ref().unwrap_or(&self.owner);
+        let repo = args.repo.as_ref().unwrap_or(&self.repo);
 
         let files = self
             .octocrab
-            .pulls(&self.owner, &self.repo)
+            .pulls(owner, repo)
             .list_files(args.pr_number)
             .await?;
 
@@ -285,6 +306,131 @@ impl Tool for ListMergedPRsTool {
     }
 }
 
+// --- Get Pull Request Comments ---
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetCommentsArgs {
+    pub pr_number: u64,
+    pub owner: Option<String>,
+    pub repo: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PRComment {
+    pub author: String,
+    pub body: String,
+    pub created_at: String,
+    pub comment_type: String, // "review" or "issue"
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetCommentsResult {
+    pub comments: Vec<PRComment>,
+}
+
+pub struct GetPRCommentsTool {
+    octocrab: Arc<Octocrab>,
+    owner: String,
+    repo: String,
+}
+
+impl GetPRCommentsTool {
+    pub fn new(octocrab: Arc<Octocrab>, owner: String, repo: String) -> Self {
+        Self {
+            octocrab,
+            owner,
+            repo,
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for GetPRCommentsTool {
+    fn name(&self) -> String {
+        "get_pull_request_comments".to_string()
+    }
+
+    fn description(&self) -> String {
+        "Gets all comments on a pull request including review comments and issue comments. Can optionally specify owner/repo.".to_string()
+    }
+
+    fn schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "pr_number": {
+                    "type": "integer",
+                    "description": "The pull request number"
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Repository owner/org (optional)"
+                },
+                "repo": {
+                    "type": "string",
+                    "description": "Repository name (optional)"
+                }
+            },
+            "required": ["pr_number"]
+        })
+    }
+
+    async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let args: GetCommentsArgs = serde_json::from_value(input)?;
+
+        let owner = args.owner.as_ref().unwrap_or(&self.owner);
+        let repo = args.repo.as_ref().unwrap_or(&self.repo);
+
+        let mut all_comments = Vec::new();
+
+        // Fetch issue comments (general PR comments)
+        let issue_comments = self
+            .octocrab
+            .issues(owner, repo)
+            .list_comments(args.pr_number)
+            .send()
+            .await?;
+
+        for comment in issue_comments.items {
+            all_comments.push(PRComment {
+                author: comment.user.login,
+                body: comment.body.unwrap_or_default(),
+                created_at: comment.created_at.to_rfc3339(),
+                comment_type: "issue".to_string(),
+            });
+        }
+
+        // Fetch review comments (inline code comments)
+        let review_comments = self
+            .octocrab
+            .pulls(owner, repo)
+            .list_comments(Some(args.pr_number))
+            .send()
+            .await?;
+
+        for comment in review_comments.items {
+            let author = comment
+                .user
+                .map(|u| u.login)
+                .unwrap_or_else(|| "unknown".to_string());
+            all_comments.push(PRComment {
+                author,
+                body: comment.body,
+                created_at: comment.created_at.to_rfc3339(),
+                comment_type: "review".to_string(),
+            });
+        }
+
+        // Sort by created_at
+        all_comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+        let result = GetCommentsResult {
+            comments: all_comments,
+        };
+        Ok(serde_json::to_value(result)?)
+    }
+}
+
 // --- Factory ---
 
 pub fn create_tools() -> Result<Vec<Arc<dyn Tool>>, Box<dyn Error + Send + Sync>> {
@@ -302,6 +448,11 @@ pub fn create_tools() -> Result<Vec<Arc<dyn Tool>>, Box<dyn Error + Send + Sync>
             repo.clone(),
         )),
         Arc::new(GetDiffTool::new(
+            octocrab.clone(),
+            owner.clone(),
+            repo.clone(),
+        )),
+        Arc::new(GetPRCommentsTool::new(
             octocrab.clone(),
             owner.clone(),
             repo.clone(),

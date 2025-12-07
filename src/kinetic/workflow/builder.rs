@@ -1,16 +1,21 @@
-use crate::adk::agent::{Agent, LLMAgent, LoopAgent, ParallelAgent, ReActAgent, SequentialAgent};
-use crate::adk::gemini::GeminiModel;
-use crate::adk::model::Model;
-use crate::adk::tool::Tool;
-use crate::kinetic::workflow::loader::{AgentDefinition, WorkflowDefinition, WorkflowLoader};
+//! Workflow builder - orchestrates workflow construction
+//!
+//! This module provides the high-level Builder that loads workflow definitions
+//! and constructs executable agent graphs.
 
+use crate::adk::agent::Agent;
 use crate::kinetic::mcp::manager::McpServiceManager;
+use crate::kinetic::workflow::agent_factory::AgentFactory;
+use crate::kinetic::workflow::graph::types::GraphWorkflowDef;
+use crate::kinetic::workflow::graph::{normalize_to_graph, CompiledNode, GraphAgent, WaitMode};
+use crate::kinetic::workflow::loader::WorkflowLoader;
 use crate::kinetic::workflow::registry::ToolRegistry;
+use crate::kinetic::workflow::types::{AgentConfig, McpServerConfig, WorkflowDefinition};
 
-use std::env;
 use std::error::Error;
 use std::sync::Arc;
 
+/// High-level builder for constructing workflows from YAML definitions
 pub struct Builder {
     loader: WorkflowLoader,
     registry: ToolRegistry,
@@ -26,23 +31,7 @@ impl Builder {
         }
     }
 
-    /// Infer the provider from the model name prefix
-    fn infer_provider_from_model(model_name: &str) -> String {
-        let name_lower = model_name.to_lowercase();
-        if name_lower.starts_with("gemini") || name_lower.starts_with("models/gemini") {
-            "Gemini".to_string()
-        } else if name_lower.starts_with("gpt") || name_lower.starts_with("o1") {
-            "OpenAI".to_string()
-        } else if name_lower.starts_with("claude") {
-            "Anthropic".to_string()
-        } else if name_lower.starts_with("deepseek") {
-            "DeepSeek".to_string()
-        } else {
-            // Default to Gemini
-            "Gemini".to_string()
-        }
-    }
-
+    /// Build a workflow agent from a YAML file path
     pub async fn build_agent(
         &self,
         file_path: &str,
@@ -51,6 +40,8 @@ impl Builder {
         self.build_from_def(&def).await
     }
 
+    /// Build a workflow agent from a parsed definition
+    #[allow(clippy::type_complexity)]
     fn build_from_def<'a>(
         &'a self,
         def: &'a WorkflowDefinition,
@@ -62,165 +53,91 @@ impl Builder {
         >,
     > {
         Box::pin(async move {
-            // Initialize MCP services and register tools
-            if !def.mcp_servers.is_empty() {
-                for server_config in &def.mcp_servers {
-                    match self.initialize_mcp_server(server_config).await {
-                        Ok(_) => log::info!("Initialized MCP server: {}", server_config.name),
-                        Err(e) => log::error!(
-                            "Failed to initialize MCP server {}: {}",
-                            server_config.name,
-                            e
-                        ),
-                    }
-                }
-            }
+            // Initialize MCP services if configured
+            self.initialize_mcp_servers(&def.mcp_servers).await;
 
-            match def.kind.as_str() {
-                "Direct" => {
-                    if let Some(agent_def) = &def.agent {
-                        self.build_llm_agent(agent_def).await
-                    } else {
-                        Err("Direct workflow missing agent definition".into())
-                    }
-                }
-                "Composite" => {
-                    if let Some(workflow_def) = &def.workflow {
-                        let mut agents = Vec::new();
-                        // Handle agents (both inline and references)
-                        for agent_config in &workflow_def.agents {
-                            match agent_config {
-                                crate::kinetic::workflow::loader::AgentConfig::Inline(
-                                    agent_def,
-                                ) => {
-                                    agents.push(self.build_llm_agent(agent_def).await?);
-                                }
-                                crate::kinetic::workflow::loader::AgentConfig::Reference(
-                                    ref_def,
-                                ) => {
-                                    let sub_agent = self.build_agent(&ref_def.file).await?;
-                                    agents.push(sub_agent);
-                                }
-                            }
-                        }
+            // Normalize all workflow kinds to graph format
+            let graph_def = normalize_to_graph(def)?;
 
-                        match workflow_def.execution.as_str() {
-                            "sequential" => Ok(Arc::new(SequentialAgent::new(
-                                def.name.clone(),
-                                def.description.clone(),
-                                agents,
-                            )) as Arc<dyn Agent>),
-                            "parallel" => Ok(Arc::new(ParallelAgent::new(
-                                def.name.clone(),
-                                def.description.clone(),
-                                agents,
-                            )) as Arc<dyn Agent>),
-                            "loop" => {
-                                if agents.len() != 1 {
-                                    return Err("Loop workflow must have exactly one agent".into());
-                                }
-                                Ok(Arc::new(LoopAgent::new(
-                                    def.name.clone(),
-                                    def.description.clone(),
-                                    agents[0].clone(),
-                                    workflow_def.max_iterations.unwrap_or(1),
-                                )) as Arc<dyn Agent>)
-                            }
-                            _ => Err(
-                                format!("Unknown execution mode: {}", workflow_def.execution)
-                                    .into(),
-                            ),
-                        }
-                    } else {
-                        Err("Composite workflow missing workflow definition".into())
-                    }
-                }
-                _ => Err(format!("Unknown workflow kind: {}", def.kind).into()),
-            }
+            log::info!(
+                "Normalized '{}' workflow '{}' to graph with {} nodes",
+                def.kind,
+                def.name,
+                graph_def.nodes.len()
+            );
+
+            // Build the graph agent from the normalized definition
+            self.build_graph_from_def(&graph_def).await
         })
     }
 
-    async fn build_llm_agent(
+    /// Build a GraphAgent from a normalized GraphWorkflowDef
+    async fn build_graph_from_def(
         &self,
-        def: &AgentDefinition,
+        graph_def: &GraphWorkflowDef,
     ) -> Result<Arc<dyn Agent>, Box<dyn Error + Send + Sync>> {
-        // Get model name from definition, env var, or default
-        let model_name = def.model.model_name.clone().unwrap_or_else(|| {
-            env::var("MODEL_NAME")
-                .or_else(|_| env::var("GEMINI_MODEL"))
-                .unwrap_or_else(|_| "gemini-2.0-flash".to_string())
-        });
+        let factory = AgentFactory::new(&self.registry);
+        let mut compiled_nodes = Vec::new();
 
-        // Infer provider from: explicit definition > MODEL_PROVIDER env > model name prefix
-        let provider = def
-            .model
-            .provider
-            .clone()
-            .or_else(|| env::var("MODEL_PROVIDER").ok())
-            .unwrap_or_else(|| Self::infer_provider_from_model(&model_name));
+        for node_def in &graph_def.nodes {
+            // Build the agent for this node
+            let agent = match &node_def.agent {
+                AgentConfig::Inline(agent_def) => factory.build(agent_def).await?,
+                AgentConfig::Reference(ref_def) => self.build_agent(&ref_def.file).await?,
+            };
 
-        log::debug!("Using provider '{}' with model '{}'", provider, model_name);
+            // Convert depends_on
+            let depends_on = node_def.depends_on.to_vec();
 
-        let model: Arc<dyn Model> = match provider.as_str() {
-            "Gemini" | "Google" | "gemini" | "" => Arc::new(GeminiModel::new(model_name)?),
-            // "OpenAI" | "openai" => Arc::new(OpenAIModel::new(model_name)?), // TODO: Implement
-            // "Anthropic" | "anthropic" => Arc::new(AnthropicModel::new(model_name)?), // TODO
-            _ => return Err(format!("Unknown model provider: {}", provider).into()),
-        };
+            // Convert wait_for
+            let wait_mode = match &node_def.wait_for {
+                WaitMode::Any => WaitMode::Any,
+                WaitMode::All => WaitMode::All,
+            };
 
-        let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
-        for tool_name in &def.tools {
-            if let Some(tool) = self.registry.get(tool_name).await {
-                tools.push(tool.clone());
-            } else {
-                log::warn!("Tool not found: {}", tool_name);
-            }
+            // Convert outputs
+            let outputs = node_def.outputs.clone().unwrap_or_default();
+
+            compiled_nodes.push(CompiledNode {
+                id: node_def.id.clone(),
+                agent,
+                depends_on,
+                when: node_def.when.clone(),
+                outputs,
+                wait_mode,
+            });
         }
 
-        // Select agent type based on executor
-        let executor = def.executor.as_deref().unwrap_or("default");
-        log::info!("Building agent '{}' with executor '{}'", def.name, executor);
+        log::info!(
+            "Built graph agent '{}' with {} nodes",
+            graph_def.name,
+            compiled_nodes.len()
+        );
 
-        match executor {
-            "react" => {
-                let max_iterations = def.max_iterations.unwrap_or(10);
-                Ok(Arc::new(ReActAgent::new(
-                    def.name.clone(),
-                    def.description.clone(),
-                    def.instructions.clone(),
-                    model,
-                    tools,
-                    max_iterations,
-                )))
-            }
-            "cot" => {
-                // Chain-of-Thought: Use standard LLMAgent with CoT-specific instructions
-                // The user should include CoT prompting in their instructions
-                log::info!("Using Chain-of-Thought executor (standard agent with CoT prompting)");
-                Ok(Arc::new(LLMAgent::new(
-                    def.name.clone(),
-                    def.description.clone(),
-                    def.instructions.clone(),
-                    model,
-                    tools,
-                )))
-            }
-            _ => {
-                // Default turn-based agent
-                Ok(Arc::new(LLMAgent::new(
-                    def.name.clone(),
-                    def.description.clone(),
-                    def.instructions.clone(),
-                    model,
-                    tools,
-                )))
+        Ok(Arc::new(GraphAgent::new(
+            graph_def.name.clone(),
+            graph_def.description.clone(),
+            compiled_nodes,
+        )))
+    }
+
+    /// Initialize MCP servers and register their tools
+    async fn initialize_mcp_servers(&self, servers: &[McpServerConfig]) {
+        for server_config in servers {
+            match self.initialize_mcp_server(server_config).await {
+                Ok(_) => log::info!("Initialized MCP server: {}", server_config.name),
+                Err(e) => log::error!(
+                    "Failed to initialize MCP server {}: {}",
+                    server_config.name,
+                    e
+                ),
             }
         }
     }
 
     async fn initialize_mcp_server(
         &self,
-        config: &crate::kinetic::workflow::loader::McpServerConfig,
+        config: &McpServerConfig,
     ) -> Result<(), Box<dyn Error + Send + Sync>> {
         use crate::kinetic::mcp::manager::McpServerConfig as ManagerConfig;
         use crate::kinetic::mcp::tool::McpTool;
@@ -265,50 +182,7 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kinetic::workflow::loader::CompositeWorkflowDefinition;
-
-    // === Provider Inference Tests ===
-
-    #[test]
-    fn test_infer_provider_gemini() {
-        assert_eq!(Builder::infer_provider_from_model("gemini-2.0-flash"), "Gemini");
-        assert_eq!(Builder::infer_provider_from_model("gemini-1.5-pro"), "Gemini");
-        assert_eq!(Builder::infer_provider_from_model("Gemini-2.0-Flash"), "Gemini");
-        assert_eq!(Builder::infer_provider_from_model("models/gemini-2.0-flash"), "Gemini");
-    }
-
-    #[test]
-    fn test_infer_provider_openai() {
-        assert_eq!(Builder::infer_provider_from_model("gpt-4"), "OpenAI");
-        assert_eq!(Builder::infer_provider_from_model("gpt-4o"), "OpenAI");
-        assert_eq!(Builder::infer_provider_from_model("gpt-3.5-turbo"), "OpenAI");
-        assert_eq!(Builder::infer_provider_from_model("GPT-4"), "OpenAI");
-        assert_eq!(Builder::infer_provider_from_model("o1-preview"), "OpenAI");
-        assert_eq!(Builder::infer_provider_from_model("o1-mini"), "OpenAI");
-    }
-
-    #[test]
-    fn test_infer_provider_anthropic() {
-        assert_eq!(Builder::infer_provider_from_model("claude-3-opus"), "Anthropic");
-        assert_eq!(Builder::infer_provider_from_model("claude-3-sonnet"), "Anthropic");
-        assert_eq!(Builder::infer_provider_from_model("Claude-3.5-Sonnet"), "Anthropic");
-    }
-
-    #[test]
-    fn test_infer_provider_deepseek() {
-        assert_eq!(Builder::infer_provider_from_model("deepseek-chat"), "DeepSeek");
-        assert_eq!(Builder::infer_provider_from_model("deepseek-coder"), "DeepSeek");
-        assert_eq!(Builder::infer_provider_from_model("DeepSeek-V2"), "DeepSeek");
-    }
-
-    #[test]
-    fn test_infer_provider_unknown_defaults_to_gemini() {
-        assert_eq!(Builder::infer_provider_from_model("unknown-model"), "Gemini");
-        assert_eq!(Builder::infer_provider_from_model("my-custom-model"), "Gemini");
-        assert_eq!(Builder::infer_provider_from_model(""), "Gemini");
-    }
-
-    // === Workflow Definition Validation Tests ===
+    use crate::kinetic::workflow::types::CompositeWorkflowDefinition;
 
     #[tokio::test]
     async fn test_direct_workflow_missing_agent_returns_error() {
@@ -322,6 +196,7 @@ mod tests {
             kind: "Direct".to_string(),
             agent: None, // Missing agent!
             workflow: None,
+            graph: None,
             overrides: None,
             mcp_servers: vec![],
         };
@@ -344,6 +219,7 @@ mod tests {
             kind: "Composite".to_string(),
             agent: None,
             workflow: None, // Missing workflow!
+            graph: None,
             overrides: None,
             mcp_servers: vec![],
         };
@@ -366,6 +242,7 @@ mod tests {
             kind: "InvalidKind".to_string(),
             agent: None,
             workflow: None,
+            graph: None,
             overrides: None,
             mcp_servers: vec![],
         };
@@ -392,6 +269,7 @@ mod tests {
                 agents: vec![],
                 max_iterations: None,
             }),
+            graph: None,
             overrides: None,
             mcp_servers: vec![],
         };
@@ -409,7 +287,4 @@ mod tests {
         let _builder = Builder::new(registry, mcp_manager);
         // Just verify it doesn't panic
     }
-
-    // Note: Testing build_llm_agent requires mocking GeminiModel which needs an API key.
-    // Those are better suited for integration tests with actual YAML files.
 }

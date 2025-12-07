@@ -72,12 +72,12 @@ Each `LLMAgent` runs a turn-based loop:
 ```rust
 for turn in 0..max_turns {
     let response = model.generate_content(&history, tools).await?;
-    
+
     // Check for text response (final answer)
     if let Some(text) = response.get_text() {
         return Ok(text);
     }
-    
+
     // Execute all function calls
     for (name, args) in response.get_function_calls() {
         let result = tools.execute(name, args).await;
@@ -224,7 +224,7 @@ mcp_servers:
   - name: "sqlite"
     command: "npx"
     args: ["-y", "@modelcontextprotocol/server-sqlite", "data.db"]
-  
+
   - name: "filesystem"
     command: "python"
     args: ["-m", "mcp_server_filesystem", "/path/to/dir"]
@@ -267,10 +267,10 @@ When the LLM requests a tool call:
 Part::FunctionCall { name, args } => {
     // Look up tool in registry
     let tool = registry.get(&name).await;
-    
+
     // Execute (works same for native or MCP)
     let result = tool.execute(args).await;
-    
+
     // Add result to conversation history
     history.push(FunctionResponse { name, response: result });
 }

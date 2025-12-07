@@ -13,10 +13,12 @@ pub struct McpServerConfig {
     pub args: Vec<String>,
 }
 
+/// Type alias for MCP service map to reduce complexity
+type ServiceMap = HashMap<String, Arc<RwLock<RunningService<RoleClient, BasicClientHandler>>>>;
+
 /// Manages the lifecycle of MCP services
 pub struct McpServiceManager {
-    services:
-        Arc<RwLock<HashMap<String, Arc<RwLock<RunningService<RoleClient, BasicClientHandler>>>>>>,
+    services: Arc<RwLock<ServiceMap>>,
 }
 
 impl McpServiceManager {

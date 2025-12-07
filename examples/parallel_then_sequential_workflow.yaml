@@ -15,7 +15,7 @@ workflow:
   agents:
     # Stage 1: Parallel data collection (nested workflow)
     - file: examples/parallel_workflow.yaml
-    
+
     # Stage 2: Combine the parallel results (agent definition)
     - file: agents/pr_combiner.yaml
 

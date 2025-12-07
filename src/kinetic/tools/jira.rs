@@ -21,19 +21,24 @@ impl JiraClient {
     fn new() -> Result<Self, Box<dyn Error + Send + Sync>> {
         let base_url = env::var("JIRA_BASE_URL").map_err(|_| "JIRA_BASE_URL must be set")?;
         let api_token = env::var("JIRA_API_TOKEN").map_err(|_| "JIRA_API_TOKEN must be set")?;
-        
+
         // Check for explicit auth type override, or auto-detect based on JIRA_EMAIL
         // JIRA_AUTH_TYPE=bearer forces Bearer auth, JIRA_AUTH_TYPE=basic forces Basic auth
         let auth_type = env::var("JIRA_AUTH_TYPE").ok();
         let email = env::var("JIRA_EMAIL").ok().filter(|e| !e.is_empty());
-        
+
         let use_bearer = match auth_type.as_deref() {
             Some("bearer") => true,
             Some("basic") => false,
             _ => email.is_none(), // Auto-detect: no email = bearer
         };
-        
-        log::info!("Jira client: base_url={}, use_bearer={}, has_email={}", base_url, use_bearer, email.is_some());
+
+        log::info!(
+            "Jira client: base_url={}, use_bearer={}, has_email={}",
+            base_url,
+            use_bearer,
+            email.is_some()
+        );
 
         Ok(Self {
             client: Client::new(),
@@ -53,13 +58,13 @@ impl JiraClient {
         // Jira Cloud uses API v3, Jira Data Center/Server uses API v2
         let api_version = if self.use_bearer { "2" } else { "3" };
         let url = format!("{}/rest/api/{}/{}", self.base_url, api_version, path);
-        
+
         let mut req = self
             .client
             .request(method, &url)
             .header("Accept", "application/json")
             .header("Content-Type", "application/json");
-        
+
         if self.use_bearer {
             req = req.bearer_auth(&self.api_token);
         } else {
@@ -124,20 +129,47 @@ impl Tool for GetIssueTool {
 
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let args: GetIssueArgs = serde_json::from_value(input)?;
+
+        // Fetch issue with comments expanded
         let json = self
             .client
-            .request(Method::GET, &format!("issue/{}", args.issue_key), None)
+            .request(
+                Method::GET,
+                &format!("issue/{}?expand=renderedFields", args.issue_key),
+                None,
+            )
             .await?;
 
         // Simplified extraction
         let fields = json.get("fields").ok_or("Missing fields in response")?;
 
+        // Extract comments
+        let comments: Vec<Value> = fields
+            .get("comment")
+            .and_then(|c| c.get("comments"))
+            .and_then(|c| c.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|comment| {
+                        json!({
+                            "author": comment.get("author").and_then(|a| a.get("displayName")),
+                            "body": comment.get("body"),
+                            "created": comment.get("created"),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
         let result = json!({
             "key": json.get("key"),
             "summary": fields.get("summary"),
-            "description": fields.get("description"), // Note: Jira description is complex ADF, might need parsing
+            "description": fields.get("description"),
             "status": fields.get("status").and_then(|s| s.get("name")),
             "assignee": fields.get("assignee").and_then(|a| a.get("displayName")),
+            "priority": fields.get("priority").and_then(|p| p.get("name")),
+            "issue_type": fields.get("issuetype").and_then(|t| t.get("name")),
+            "comments": comments,
         });
 
         Ok(result)

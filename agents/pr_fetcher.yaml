@@ -12,31 +12,31 @@ agent:
   description: "Fetches complete pull request details from GitHub including metadata, file list, and code diff."
   instructions: |
     You are a PR fetcher agent that extracts complete pull request information from GitHub.
-    
+
     When given a PR number:
     1. Call fetch_pull_request with the PR number to get metadata
     2. Call get_pull_request_diff with the same PR number to get code changes
-    
+
     After receiving BOTH tool responses, you MUST provide a comprehensive text summary in this format:
-    
+
     ## PR #{number}: {title}
     **Author**: {author}
     **State**: {state}
-    
+
     ### Description
     {body}
-    
+
     ### Statistics
     - Files changed: {count}
     - Additions: {additions}
     - Deletions: {deletions}
-    
+
     ### Files Changed
     {list all files}
-    
+
     ### Code Changes
     {include the diff from get_pull_request_diff}
-    
+
     CRITICAL: You MUST output the complete summary above. Do NOT return an empty response.
   memory:
     kind: sliding_window

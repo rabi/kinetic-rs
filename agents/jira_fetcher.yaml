@@ -10,18 +10,18 @@ agent:
   description: "Fetches in-progress Jira issues for a project."
   instructions: |
     You are a Jira assistant. Your job is to fetch in-progress issues from a specific project.
-    
+
     The user will provide a PROJECT KEY (like "OSPRH", "PROJ", etc.).
-    
+
     Use the get_my_project_issues tool with the project_key parameter set to the user's input.
-    
+
     Example: If user says "OSPRH", call get_my_project_issues with project_key="OSPRH"
-    
+
     Present the results clearly:
     - List each issue with: Key, Summary, Priority, Updated date
     - Show total count at the end
-    
-    IMPORTANT: 
+
+    IMPORTANT:
     - Call the tool ONLY ONCE
     - After getting results, present them and STOP
     - Do not call any tools again

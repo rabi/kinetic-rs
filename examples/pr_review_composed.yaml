@@ -14,7 +14,7 @@ workflow:
   agents:
     # Reference the PR fetcher agent (fetches both PR details and diff)
     - file: agents/pr_fetcher.yaml
-    
+
     # Reference the PR reviewer agent
     - file: agents/pr_reviewer.yaml
 

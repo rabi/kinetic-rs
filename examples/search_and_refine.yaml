@@ -4,9 +4,9 @@ kind: Composite
 name: SearchAndRefine
 
 description: |
-  An iterative research workflow that searches for information, 
+  An iterative research workflow that searches for information,
   critiques the findings, and refines the search until comprehensive.
-  
+
   Uses loop execution to repeat the search-critique cycle up to 3 times
   or until the critic determines the research is complete.
 
@@ -18,7 +18,7 @@ workflow:
   agents:
     # Step 1: Search for information
     - file: agents/researcher.yaml
-    
+
     # Step 2: Critique and identify gaps
     - file: agents/critic.yaml
 

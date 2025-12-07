@@ -10,10 +10,10 @@ agent:
   description: "Fetches all in-progress issues assigned to you."
   instructions: |
     You are a Jira assistant. Fetch all in-progress issues assigned to the current user.
-    
+
     Use the get_assigned_issues tool with status="In Progress" to fetch all assigned issues.
-    
-    IMPORTANT: 
+
+    IMPORTANT:
     - Call the tool ONLY ONCE
     - After getting results, output them and STOP
     - Do not call any tools again

@@ -1,79 +1,13 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+//! Workflow loader - YAML file loading and parsing
+//!
+//! This module handles loading workflow definitions from YAML files.
+
+use super::types::WorkflowDefinition;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct WorkflowDefinition {
-    pub name: String,
-    pub description: String,
-    pub kind: String, // "Direct" or "Composite"
-    pub agent: Option<AgentDefinition>,
-    pub workflow: Option<CompositeWorkflowDefinition>,
-    pub overrides: Option<HashMap<String, serde_json::Value>>,
-    #[serde(default)]
-    pub mcp_servers: Vec<McpServerConfig>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct McpServerConfig {
-    pub name: String,
-    pub command: String,
-    pub args: Vec<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct AgentDefinition {
-    pub name: String,
-    pub description: String,
-    pub instructions: String,
-    /// Executor type: "default" (turn-based), "react" (Thought-Action-Observation), "cot" (Chain-of-Thought)
-    pub executor: Option<String>,
-    pub model: ModelDefinition,
-    pub tools: Vec<String>,
-    pub memory: Option<MemoryDefinition>,
-    pub workflow: Option<WorkflowReference>,
-    /// Maximum iterations for ReAct executor (default: 10)
-    pub max_iterations: Option<u32>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct CompositeWorkflowDefinition {
-    pub execution: String, // "sequential", "parallel", "loop"
-    #[serde(default)]
-    pub agents: Vec<AgentConfig>,
-    pub max_iterations: Option<u32>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(untagged)]
-pub enum AgentConfig {
-    Inline(AgentDefinition),
-    Reference(WorkflowReference),
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ModelDefinition {
-    /// Provider is optional - can be inferred from model_name or MODEL_PROVIDER env var
-    pub provider: Option<String>,
-    pub model_name: Option<String>,
-    pub kind: Option<String>,
-    pub parameters: Option<HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct MemoryDefinition {
-    pub kind: String,
-    pub parameters: Option<HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct WorkflowReference {
-    pub file: String,
-    pub overrides: Option<HashMap<String, serde_json::Value>>,
-}
-
+/// Loads workflow definitions from YAML files
 pub struct WorkflowLoader;
 
 impl WorkflowLoader {
@@ -81,13 +15,13 @@ impl WorkflowLoader {
         Self
     }
 
+    /// Load a workflow definition from a YAML file
     pub fn load_workflow<P: AsRef<Path>>(
         &self,
         path: P,
     ) -> Result<WorkflowDefinition, Box<dyn Error + Send + Sync>> {
         let content = fs::read_to_string(path)?;
-        let def: WorkflowDefinition = serde_yaml::from_str(&content)?;
-        Ok(def)
+        Self::parse_yaml(&content)
     }
 
     /// Parse a workflow definition from a YAML string
@@ -106,6 +40,7 @@ impl Default for WorkflowLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::kinetic::workflow::types::AgentConfig;
 
     #[test]
     fn test_parse_direct_workflow() {
@@ -200,7 +135,7 @@ agent:
         let agent = def.agent.unwrap();
         assert_eq!(agent.model.provider, Some("OpenAI".to_string()));
         assert_eq!(agent.model.model_name, Some("gpt-4o".to_string()));
-        
+
         let params = agent.model.parameters.unwrap();
         assert_eq!(params.get("temperature").unwrap(), &serde_json::json!(0.5));
     }
@@ -268,7 +203,7 @@ workflow:
 "#;
         let def = WorkflowLoader::parse_yaml(yaml).unwrap();
         let workflow = def.workflow.unwrap();
-        
+
         match &workflow.agents[0] {
             AgentConfig::Reference(ref_def) => {
                 assert_eq!(ref_def.file, "agents/step1.yaml");
@@ -281,7 +216,7 @@ workflow:
     fn test_invalid_yaml_returns_error() {
         let yaml = r#"
 kind: Direct
-name: 
+name:
   - invalid structure
 "#;
         let result = WorkflowLoader::parse_yaml(yaml);

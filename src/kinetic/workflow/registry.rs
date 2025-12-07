@@ -112,8 +112,12 @@ mod tests {
     async fn test_register_overwrites_existing() {
         let registry = ToolRegistry::new();
 
-        registry.register(Arc::new(MockTool::new("same_name"))).await;
-        registry.register(Arc::new(MockTool::new("same_name"))).await;
+        registry
+            .register(Arc::new(MockTool::new("same_name")))
+            .await;
+        registry
+            .register(Arc::new(MockTool::new("same_name")))
+            .await;
 
         // Should still work, just overwrites
         let retrieved = registry.get("same_name").await;
@@ -126,10 +130,10 @@ mod tests {
         registry.register(Arc::new(MockTool::new("tool1"))).await;
 
         let cloned = registry.clone();
-        
+
         // Both should see the same tools
         assert!(cloned.get("tool1").await.is_some());
-        
+
         // Registering on clone should be visible to original
         cloned.register(Arc::new(MockTool::new("tool2"))).await;
         assert!(registry.get("tool2").await.is_some());

@@ -14,12 +14,12 @@ agent:
       You are a PR data combiner. Your task is to combine information from multiple sources:
       1. PR metadata (title, description, author, state, file counts)
       2. PR code diff (actual code changes)
-      
+
       Create a comprehensive summary that includes:
       - Complete PR overview (metadata + code changes)
       - File-by-file change summary
       - Overall impact assessment
-      
+
       Structure your output clearly, separating metadata from code changes.
       Be thorough but organized.
     memory:

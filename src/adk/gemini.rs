@@ -48,7 +48,11 @@ impl Model for GeminiModel {
                     .filter_map(|p| match p {
                         Part::Text(t) => Some(json!({ "text": t })),
                         Part::Thinking(_) => None, // Thinking is internal, not sent to API
-                        Part::FunctionCall { name, args, thought_signature } => {
+                        Part::FunctionCall {
+                            name,
+                            args,
+                            thought_signature,
+                        } => {
                             let mut fc = json!({ "functionCall": { "name": name, "args": args } });
                             // Include thought_signature if present (required by Gemini thinking models)
                             if let Some(sig) = thought_signature {
@@ -56,9 +60,9 @@ impl Model for GeminiModel {
                             }
                             Some(fc)
                         }
-                        Part::FunctionResponse { name, response } => {
-                            Some(json!({ "functionResponse": { "name": name, "response": response } }))
-                        }
+                        Part::FunctionResponse { name, response } => Some(
+                            json!({ "functionResponse": { "name": name, "response": response } }),
+                        ),
                     })
                     .collect();
                 json!({ "role": c.role, "parts": parts })
@@ -144,10 +148,12 @@ impl Model for GeminiModel {
             Some(c) => c,
             None => {
                 log::error!("No content in candidate. Full response: {}", resp_json);
-                return Err(format!("No content in Gemini response. Candidate: {}", candidate).into());
+                return Err(
+                    format!("No content in Gemini response. Candidate: {}", candidate).into(),
+                );
             }
         };
-        
+
         let parts_json = match content.get("parts").and_then(|v| v.as_array()) {
             Some(p) => p,
             None => {
@@ -165,7 +171,7 @@ impl Model for GeminiModel {
                     parts.push(Part::Thinking(thought.to_string()));
                 }
             }
-            
+
             // Regular text content
             if let Some(text) = p["text"].as_str() {
                 parts.push(Part::Text(text.to_string()));
@@ -177,7 +183,11 @@ impl Model for GeminiModel {
                     .get("thoughtSignature")
                     .and_then(|s| s.as_str())
                     .map(|s| s.to_string());
-                parts.push(Part::FunctionCall { name, args, thought_signature });
+                parts.push(Part::FunctionCall {
+                    name,
+                    args,
+                    thought_signature,
+                });
             }
         }
 
@@ -194,7 +204,11 @@ pub fn part_to_gemini_json(part: &Part) -> Option<serde_json::Value> {
     match part {
         Part::Text(t) => Some(json!({ "text": t })),
         Part::Thinking(_) => None, // Thinking is internal, not sent to API
-        Part::FunctionCall { name, args, thought_signature } => {
+        Part::FunctionCall {
+            name,
+            args,
+            thought_signature,
+        } => {
             let mut fc = json!({ "functionCall": { "name": name, "args": args } });
             if let Some(sig) = thought_signature {
                 fc["thoughtSignature"] = json!(sig);
@@ -210,14 +224,14 @@ pub fn part_to_gemini_json(part: &Part) -> Option<serde_json::Value> {
 /// Parse a Gemini API JSON part into a Part
 pub fn parse_gemini_part(p: &serde_json::Value) -> Vec<Part> {
     let mut parts = Vec::new();
-    
+
     // Check for thinking/reasoning content
     if let Some(thought) = p.get("thought").and_then(|t| t.as_str()) {
         if !thought.is_empty() {
             parts.push(Part::Thinking(thought.to_string()));
         }
     }
-    
+
     // Regular text content
     if let Some(text) = p["text"].as_str() {
         parts.push(Part::Text(text.to_string()));
@@ -228,9 +242,13 @@ pub fn parse_gemini_part(p: &serde_json::Value) -> Vec<Part> {
             .get("thoughtSignature")
             .and_then(|s| s.as_str())
             .map(|s| s.to_string());
-        parts.push(Part::FunctionCall { name, args, thought_signature });
+        parts.push(Part::FunctionCall {
+            name,
+            args,
+            thought_signature,
+        });
     }
-    
+
     parts
 }
 
@@ -262,7 +280,7 @@ mod tests {
             thought_signature: None,
         };
         let json = part_to_gemini_json(&part).unwrap();
-        
+
         assert_eq!(json["functionCall"]["name"], "search");
         assert_eq!(json["functionCall"]["args"]["query"], "rust");
         assert!(json.get("thoughtSignature").is_none());
@@ -276,7 +294,7 @@ mod tests {
             thought_signature: Some("sig123abc".to_string()),
         };
         let json = part_to_gemini_json(&part).unwrap();
-        
+
         assert_eq!(json["functionCall"]["name"], "search");
         assert_eq!(json["functionCall"]["args"]["query"], "rust");
         assert_eq!(json["thoughtSignature"], "sig123abc");
@@ -289,9 +307,12 @@ mod tests {
             response: json!({"results": ["a", "b"]}),
         };
         let json = part_to_gemini_json(&part).unwrap();
-        
+
         assert_eq!(json["functionResponse"]["name"], "search");
-        assert_eq!(json["functionResponse"]["response"]["results"], json!(["a", "b"]));
+        assert_eq!(
+            json["functionResponse"]["response"]["results"],
+            json!(["a", "b"])
+        );
     }
 
     // === Parsing Tests ===
@@ -300,7 +321,7 @@ mod tests {
     fn test_parse_text_part() {
         let json = json!({ "text": "Hello world" });
         let parts = parse_gemini_part(&json);
-        
+
         assert_eq!(parts.len(), 1);
         match &parts[0] {
             Part::Text(t) => assert_eq!(t, "Hello world"),
@@ -312,7 +333,7 @@ mod tests {
     fn test_parse_thinking_part() {
         let json = json!({ "thought": "Let me think about this..." });
         let parts = parse_gemini_part(&json);
-        
+
         assert_eq!(parts.len(), 1);
         match &parts[0] {
             Part::Thinking(t) => assert_eq!(t, "Let me think about this..."),
@@ -329,10 +350,14 @@ mod tests {
             }
         });
         let parts = parse_gemini_part(&json);
-        
+
         assert_eq!(parts.len(), 1);
         match &parts[0] {
-            Part::FunctionCall { name, args, thought_signature } => {
+            Part::FunctionCall {
+                name,
+                args,
+                thought_signature,
+            } => {
                 assert_eq!(name, "get_weather");
                 assert_eq!(args["city"], "London");
                 assert!(thought_signature.is_none());
@@ -351,10 +376,14 @@ mod tests {
             "thoughtSignature": "EvoRCvcRAXLI2nw7..."
         });
         let parts = parse_gemini_part(&json);
-        
+
         assert_eq!(parts.len(), 1);
         match &parts[0] {
-            Part::FunctionCall { name, args, thought_signature } => {
+            Part::FunctionCall {
+                name,
+                args,
+                thought_signature,
+            } => {
                 assert_eq!(name, "search");
                 assert_eq!(args["q"], "rust programming");
                 assert_eq!(thought_signature.as_ref().unwrap(), "EvoRCvcRAXLI2nw7...");
@@ -367,7 +396,7 @@ mod tests {
     fn test_parse_empty_thought_ignored() {
         let json = json!({ "thought": "", "text": "Hello" });
         let parts = parse_gemini_part(&json);
-        
+
         // Empty thought should be ignored, only text should be parsed
         assert_eq!(parts.len(), 1);
         match &parts[0] {
@@ -388,14 +417,14 @@ mod tests {
             },
             "thoughtSignature": "original_signature_xyz"
         });
-        
+
         // Parse it
         let parts = parse_gemini_part(&received_json);
         assert_eq!(parts.len(), 1);
-        
+
         // Serialize it back (as would happen when sending history back to Gemini)
         let serialized = part_to_gemini_json(&parts[0]).unwrap();
-        
+
         // Verify thought_signature is preserved
         assert_eq!(serialized["thoughtSignature"], "original_signature_xyz");
         assert_eq!(serialized["functionCall"]["name"], "fetch_data");
@@ -404,7 +433,7 @@ mod tests {
     #[test]
     fn test_multi_turn_conversation_preserves_signatures() {
         // Simulate a multi-turn conversation
-        let history = vec![
+        let history = [
             Content {
                 role: "user".to_string(),
                 parts: vec![Part::Text("Search for Rust".to_string())],
@@ -425,20 +454,17 @@ mod tests {
                 }],
             },
         ];
-        
+
         // Serialize the history (as GeminiModel does)
         let serialized: Vec<serde_json::Value> = history
             .iter()
             .map(|c| {
-                let parts: Vec<serde_json::Value> = c
-                    .parts
-                    .iter()
-                    .filter_map(part_to_gemini_json)
-                    .collect();
+                let parts: Vec<serde_json::Value> =
+                    c.parts.iter().filter_map(part_to_gemini_json).collect();
                 json!({ "role": c.role, "parts": parts })
             })
             .collect();
-        
+
         // Verify the function call in turn 2 has the thought_signature
         let turn2_parts = serialized[1]["parts"].as_array().unwrap();
         assert_eq!(turn2_parts[0]["thoughtSignature"], "turn1_sig");

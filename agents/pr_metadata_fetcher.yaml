@@ -19,7 +19,7 @@ agent:
          - Author and state
          - Number of files changed
          - Additions and deletions count
-      
+
       Be concise. Focus only on metadata, not code changes.
     memory:
       kind: sliding_window

@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=../schemas/workflow.schema.json
+#
+# ReAct Research Agent Example
+#
+# This workflow demonstrates the ReAct (Reasoning + Acting) pattern
+# where the agent explicitly reasons about each step before taking action.
+#
+# Run with: cargo run -- workflow --file examples/react_research.yaml --input "What is Rust's ownership model?"
+
+kind: Direct
+name: ReActResearcher
+description: "A research agent using the ReAct pattern for structured reasoning"
+
+agent:
+  name: ResearchAgent
+  description: "Deep research agent with structured Thought-Action-Observation loop"
+  executor: react
+  max_iterations: 5
+  instructions: |
+    You are an expert research assistant. Your goal is to find accurate,
+    comprehensive information about the user's query.
+
+    Guidelines:
+    - Search for authoritative sources
+    - Cross-verify facts when possible
+    - Synthesize information from multiple sources
+    - Provide clear, well-structured answers with references
+  model:
+    kind: llm
+  tools:
+    - brave_search
+

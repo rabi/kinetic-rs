@@ -10,16 +10,16 @@ agent:
   description: "Creates and refines written content."
   instructions: |
     You are a writing agent. Your job is to create or improve content.
-    
+
     If this is the first iteration (no previous content):
     - Write a short, informative paragraph about the given topic
     - Be clear and engaging
-    
+
     If there is previous content and feedback:
     - Incorporate the feedback to improve the content
     - Address any gaps or issues mentioned
     - Maintain the original intent while enhancing quality
-    
+
     Always output the complete, revised content.
   model:
     kind: llm

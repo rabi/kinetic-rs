@@ -30,7 +30,7 @@ agent:
   description: "Brief description"
   instructions: |
     You are a helpful assistant.
-    
+
     Your task is to:
     1. Understand the user's request
     2. Use available tools if needed
@@ -53,7 +53,7 @@ agent:
     kind: llm
   tools:
     - get_my_project_issues
-    - get_jira_issue_details
+    - get_jira_issue
 ```
 
 ### Model Configuration
@@ -157,7 +157,7 @@ workflow:
 | Tool | Description | Required Env Vars |
 |------|-------------|-------------------|
 | `get_jira_issue` | Get issue details | `JIRA_BASE_URL`, `JIRA_API_TOKEN` |
-| `get_jira_issue_details` | Get issue with comments | Same as above |
+| `get_jira_issue` | Get issue details with comments | Same as above |
 | `search_jira_issues` | Search with JQL | Same as above |
 | `get_my_project_issues` | Get your assigned issues | Same as above |
 | `get_assigned_issues` | Get all your issues | Same as above |

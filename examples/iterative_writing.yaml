@@ -6,7 +6,7 @@ name: IterativeWriting
 description: |
   An iterative writing workflow that creates content, gets editorial feedback,
   and refines until the editor approves or max iterations reached.
-  
+
   This demonstrates loop execution without requiring external API keys.
 
 # Loop execution: repeats write-edit cycle up to 3 times
@@ -17,7 +17,7 @@ workflow:
   agents:
     # Step 1: Write or revise content
     - file: agents/writer.yaml
-    
+
     # Step 2: Edit and provide feedback
     - file: agents/editor.yaml
 

@@ -10,12 +10,12 @@ agent:
   description: "Searches the web and summarizes findings."
   instructions: |
     You are a research agent. Your job is to search the web for information.
-    
+
     1. Analyze the user's query to understand what information is needed
     2. Use the brave_search tool to find relevant information
     3. Summarize the key findings from the search results
     4. Include source URLs for reference
-    
+
     Be thorough but concise. Focus on factual, recent information.
   model:
     kind: llm
