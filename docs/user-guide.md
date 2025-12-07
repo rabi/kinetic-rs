@@ -138,6 +138,90 @@ workflow:
     - file: agents/processor.yaml
 ```
 
+### Graph Workflows (DAG)
+
+Graph workflows enable complex DAG-based execution with conditional branching:
+
+```yaml
+kind: Graph
+name: IntentRouter
+description: "Routes based on user intent"
+
+graph:
+  state:
+    intent:
+      type: string
+      default: "unknown"
+
+  nodes:
+    - id: classifier
+      agent:
+        name: IntentClassifier
+        description: "Classifies user intent"
+        instructions: |
+          Classify the user's intent as: bug, feature, or question.
+          Output only the intent type.
+        model:
+          kind: llm
+        tools: []
+      outputs:
+        intent: "intent"
+
+    - id: bug_handler
+      depends_on: classifier
+      when: "intent == 'bug'"
+      agent:
+        file: agents/bug_handler.yaml
+
+    - id: feature_handler
+      depends_on: classifier
+      when: "intent == 'feature'"
+      agent:
+        file: agents/feature_handler.yaml
+
+    - id: question_handler
+      depends_on: classifier
+      when: "intent == 'question'"
+      agent:
+        file: agents/question_handler.yaml
+```
+
+**Graph Features:**
+- **State Management**: Share data between nodes via `outputs` mapping
+- **Conditional Execution**: Use `when` expressions to conditionally run nodes
+- **Dependencies**: `depends_on` controls execution order
+- **Wait Modes**: `wait_for: any` runs when first dependency completes
+
+### ReAct Agent
+
+The ReAct (Reasoning + Acting) pattern provides explicit thought/action/observation loops:
+
+```yaml
+kind: Direct
+name: ReActResearcher
+
+agent:
+  name: Researcher
+  description: "Research agent"
+  executor: react          # Enable ReAct mode
+  max_iterations: 10       # Max thought-action cycles
+  instructions: |
+    Research the given topic using available tools.
+    Think step by step about what information you need.
+    After gathering information, provide a comprehensive answer.
+  model:
+    kind: llm
+  tools:
+    - brave_search
+    - get_jira_issue
+```
+
+**ReAct Loop:**
+1. **Thought**: Agent reasons about what to do next
+2. **Action**: Agent calls a tool
+3. **Observation**: Tool result is added to context
+4. Repeat until agent provides a `Final Answer`
+
 ---
 
 ## Using Tools

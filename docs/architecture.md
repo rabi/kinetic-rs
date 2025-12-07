@@ -34,9 +34,11 @@ Kinetic-rs is built around three core concepts:
 | Type | Description |
 |------|-------------|
 | `LLMAgent` | Single agent with LLM, tools, and instructions |
+| `ReActAgent` | Explicit Thought → Action → Observation reasoning loop |
 | `SequentialAgent` | Runs sub-agents one after another, passing output as input |
 | `ParallelAgent` | Runs sub-agents concurrently, combines outputs |
 | `LoopAgent` | Repeats sub-agent until max iterations or termination |
+| `GraphAgent` | DAG-based execution with conditional branching and state |
 
 ### Execution Flow
 
@@ -97,9 +99,16 @@ kinetic-rs/
 │   │   ├── agent.rs         # Agent trait and implementations
 │   │   ├── model.rs         # Model trait (LLM abstraction)
 │   │   ├── gemini.rs        # Gemini API implementation
-│   │   └── tool.rs          # Tool trait
+│   │   ├── tool.rs          # Tool trait
+│   │   └── error.rs         # Typed error handling
 │   └── kinetic/
 │       ├── workflow/
+│       │   ├── graph/       # Graph workflow execution
+│       │   │   ├── executor.rs  # GraphAgent implementation
+│       │   │   ├── normalizer.rs # Workflow → Graph conversion
+│       │   │   └── types.rs     # Graph node definitions
+│       │   ├── condition/   # Conditional expressions
+│       │   ├── state/       # Workflow state management
 │       │   ├── loader.rs    # YAML parsing
 │       │   ├── builder.rs   # Workflow construction
 │       │   └── registry.rs  # Tool registry
@@ -112,6 +121,7 @@ kinetic-rs/
 │           └── tool.rs      # MCP tool wrapper
 ├── agents/                   # Reusable agent definitions
 ├── examples/                 # Example workflows
+├── tests/                    # Integration tests
 └── schemas/                  # JSON Schema for validation
 ```
 
@@ -125,7 +135,7 @@ pub trait Model: Send + Sync {
     async fn generate_content(
         &self,
         history: &[Content],
-        system_instruction: Option<&str>,
+        config: Option<&GenerationConfig>,
         tools: Option<&[Arc<dyn Tool>]>,
     ) -> Result<Content, Box<dyn Error + Send + Sync>>;
 }
@@ -149,9 +159,9 @@ All tools implement the `Tool` trait:
 ```rust
 #[async_trait]
 pub trait Tool: Send + Sync {
-    fn name(&self) -> String;
-    fn description(&self) -> String;
-    fn schema(&self) -> Value;  // JSON Schema for parameters
+    fn name(&self) -> &str;           // Returns reference (no allocation)
+    fn description(&self) -> &str;    // Returns reference
+    fn schema(&self) -> &Value;       // Returns reference to JSON schema
     async fn execute(&self, input: Value) -> Result<Value, Error>;
 }
 ```

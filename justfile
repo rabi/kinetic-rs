@@ -6,6 +6,11 @@
 default:
     @just --list
 
+# Set up git hooks (installs cargo-husky pre-commit hook)
+setup-hooks:
+    cargo test --no-run
+    @echo "✅ Git hooks installed! Pre-commit will run fmt + clippy."
+
 # Build the project
 build:
     cargo build
