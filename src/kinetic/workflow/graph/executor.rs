@@ -258,8 +258,8 @@ fn extract_json_path(json: &serde_json::Value, path: &str) -> Option<serde_json:
 
 #[async_trait]
 impl Agent for GraphAgent {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -348,8 +348,8 @@ mod tests {
 
     #[async_trait]
     impl Agent for MockNodeAgent {
-        fn name(&self) -> String {
-            self.name.clone()
+        fn name(&self) -> &str {
+            &self.name
         }
 
         async fn run(&self, _input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -380,8 +380,8 @@ mod tests {
 
     #[async_trait]
     impl Agent for InputCapturingAgent {
-        fn name(&self) -> String {
-            self.name.clone()
+        fn name(&self) -> &str {
+            &self.name
         }
 
         async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {

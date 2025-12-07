@@ -1,12 +1,14 @@
 use crate::adk::model::{Content, Model, Part};
 use crate::adk::tool::Tool;
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 
 #[async_trait]
 pub trait Agent: Send + Sync {
-    fn name(&self) -> String;
+    /// Returns the agent name (optimization 1.3: return &str instead of String)
+    fn name(&self) -> &str;
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>>;
 }
 
@@ -16,6 +18,8 @@ pub struct LLMAgent {
     pub instruction: String,
     pub model: Arc<dyn Model>,
     pub tools: Vec<Arc<dyn Tool>>,
+    /// HashMap for O(1) tool lookups (optimization 2.4)
+    tool_map: HashMap<String, usize>,
 }
 
 impl LLMAgent {
@@ -26,20 +30,33 @@ impl LLMAgent {
         model: Arc<dyn Model>,
         tools: Vec<Arc<dyn Tool>>,
     ) -> Self {
+        // Build tool lookup map (optimization 2.4)
+        let tool_map: HashMap<String, usize> = tools
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.name().to_string(), i))
+            .collect();
+
         Self {
             name,
             description,
             instruction,
             model,
             tools,
+            tool_map,
         }
+    }
+
+    /// O(1) tool lookup by name (optimization 2.4)
+    fn get_tool(&self, name: &str) -> Option<&Arc<dyn Tool>> {
+        self.tool_map.get(name).map(|&i| &self.tools[i])
     }
 }
 
 #[async_trait]
 impl Agent for LLMAgent {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -68,10 +85,8 @@ impl Agent for LLMAgent {
                 response.parts.len()
             );
 
-            // Add model response to history
-            history.push(response.clone());
-
-            // Check if response contains a text part (final answer)
+            // Check for text response BEFORE adding to history (optimization 3.3)
+            // This avoids cloning when we can return early
             for part in &response.parts {
                 if let Part::Text(text) = part {
                     if !text.is_empty() {
@@ -86,13 +101,13 @@ impl Agent for LLMAgent {
                 }
             }
 
-            // Collect all function calls from the response
-            let function_calls: Vec<_> = response
+            // Collect function calls using references (optimization 2.2)
+            let function_calls: Vec<(&str, &serde_json::Value)> = response
                 .parts
                 .iter()
                 .filter_map(|part| {
                     if let Part::FunctionCall { name, args, .. } = part {
-                        Some((name.clone(), args.clone()))
+                        Some((name.as_str(), args))
                     } else {
                         None
                     }
@@ -100,7 +115,6 @@ impl Agent for LLMAgent {
                 .collect();
 
             if function_calls.is_empty() {
-                // No text and no function calls - this is unexpected
                 log::warn!(
                     "Agent {} received empty response with no function calls",
                     self.name
@@ -108,13 +122,13 @@ impl Agent for LLMAgent {
                 return Ok(String::new());
             }
 
-            // Execute all function calls and collect responses
-            let mut function_responses = Vec::new();
+            // Execute function calls and build responses
+            let mut function_responses = Vec::with_capacity(function_calls.len());
             for (name, args) in function_calls {
                 log::info!("Tool call: {} {:?}", name, args);
 
-                let tool = self.tools.iter().find(|t| t.name() == name);
-                let tool_response = if let Some(t) = tool {
+                // Use O(1) HashMap lookup (optimization 2.4)
+                let tool_response = if let Some(t) = self.get_tool(name) {
                     match t.execute(args.clone()).await {
                         Ok(res) => res,
                         Err(e) => {
@@ -134,12 +148,15 @@ impl Agent for LLMAgent {
                 );
 
                 function_responses.push(Part::FunctionResponse {
-                    name: name.clone(),
+                    name: name.to_string(),
                     response: tool_response,
                 });
             }
 
-            // Add all tool responses to history in a single message
+            // Add model response to history (optimization 3.3: move instead of clone when possible)
+            history.push(response);
+
+            // Add tool responses to history
             history.push(Content {
                 role: "user".to_string(),
                 parts: function_responses,
@@ -174,8 +191,8 @@ impl SequentialAgent {
 
 #[async_trait]
 impl Agent for SequentialAgent {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -205,8 +222,8 @@ impl ParallelAgent {
 
 #[async_trait]
 impl Agent for ParallelAgent {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -254,8 +271,8 @@ impl LoopAgent {
 
 #[async_trait]
 impl Agent for LoopAgent {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -419,8 +436,8 @@ Always think step by step. After receiving tool results (Observations), continue
 
 #[async_trait]
 impl Agent for ReActAgent {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -519,8 +536,8 @@ mod tests {
 
     #[async_trait]
     impl Agent for MockAgent {
-        fn name(&self) -> String {
-            self.name.clone()
+        fn name(&self) -> &str {
+            &self.name
         }
 
         async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
@@ -641,29 +658,36 @@ mod tests {
         }
     }
 
+    use once_cell::sync::Lazy;
+
+    static MOCK_TOOL_SCHEMA: Lazy<serde_json::Value> =
+        Lazy::new(|| json!({"type": "object", "properties": {"query": {"type": "string"}}}));
+
     /// Mock tool for testing
     struct MockTool {
         name: String,
+        description: String,
     }
 
     impl MockTool {
         fn new(name: &str) -> Self {
             Self {
                 name: name.to_string(),
+                description: format!("Mock tool: {}", name),
             }
         }
     }
 
     #[async_trait]
     impl Tool for MockTool {
-        fn name(&self) -> String {
-            self.name.clone()
+        fn name(&self) -> &str {
+            &self.name
         }
-        fn description(&self) -> String {
-            format!("Mock tool: {}", self.name)
+        fn description(&self) -> &str {
+            &self.description
         }
-        fn schema(&self) -> serde_json::Value {
-            json!({"type": "object", "properties": {"query": {"type": "string"}}})
+        fn schema(&self) -> &serde_json::Value {
+            &MOCK_TOOL_SCHEMA
         }
         async fn execute(
             &self,

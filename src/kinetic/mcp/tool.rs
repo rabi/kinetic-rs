@@ -39,16 +39,16 @@ impl McpTool {
 
 #[async_trait]
 impl Tool for McpTool {
-    fn name(&self) -> String {
-        self.name.clone()
+    fn name(&self) -> &str {
+        &self.name
     }
 
-    fn description(&self) -> String {
-        self.description.clone()
+    fn description(&self) -> &str {
+        &self.description
     }
 
-    fn schema(&self) -> Value {
-        self.schema.clone()
+    fn schema(&self) -> &Value {
+        &self.schema
     }
 
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {

@@ -1,10 +1,34 @@
 use crate::adk::tool::Tool;
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
 use std::error::Error;
+
+// --- Static schema ---
+
+static BRAVE_SEARCH_SCHEMA: Lazy<Value> = Lazy::new(|| {
+    json!({
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The search query"
+            },
+            "count": {
+                "type": "integer",
+                "description": "Number of results to return (default 10, max 20)"
+            },
+            "freshness": {
+                "type": "string",
+                "description": "Freshness filter: pd (past day), pw (past week), pm (past month), py (past year)"
+            }
+        },
+        "required": ["query"]
+    })
+});
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BraveSearchArgs {
@@ -47,33 +71,16 @@ impl BraveSearchTool {
 
 #[async_trait]
 impl Tool for BraveSearchTool {
-    fn name(&self) -> String {
-        "brave_search".to_string()
+    fn name(&self) -> &str {
+        "brave_search"
     }
 
-    fn description(&self) -> String {
-        "Searches the web using Brave Search API. Returns relevant search results with titles, URLs, and descriptions.".to_string()
+    fn description(&self) -> &str {
+        "Searches the web using Brave Search API. Returns relevant search results with titles, URLs, and descriptions."
     }
 
-    fn schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query"
-                },
-                "count": {
-                    "type": "integer",
-                    "description": "Number of results to return (default 10, max 20)"
-                },
-                "freshness": {
-                    "type": "string",
-                    "description": "Freshness filter: pd (past day), pw (past week), pm (past month), py (past year)"
-                }
-            },
-            "required": ["query"]
-        })
+    fn schema(&self) -> &Value {
+        &BRAVE_SEARCH_SCHEMA
     }
 
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -105,7 +112,6 @@ impl Tool for BraveSearchTool {
 
         let body: Value = resp.json().await?;
 
-        // Extract results from the "web" -> "results" path
         let results_json = body
             .get("web")
             .and_then(|w| w.get("results"))

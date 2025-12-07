@@ -1,11 +1,90 @@
 use crate::adk::tool::Tool;
 use async_trait::async_trait;
 use octocrab::Octocrab;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
 use std::error::Error;
 use std::sync::Arc;
+
+// --- Static schemas (computed once, returned by reference) ---
+
+static FETCH_PR_SCHEMA: Lazy<Value> = Lazy::new(|| {
+    json!({
+        "type": "object",
+        "properties": {
+            "pr_number": {
+                "type": "integer",
+                "description": "The pull request number"
+            },
+            "owner": {
+                "type": "string",
+                "description": "Repository owner/org (optional, defaults to GITHUB_ORG env var)"
+            },
+            "repo": {
+                "type": "string",
+                "description": "Repository name (optional, defaults to GITHUB_REPO env var)"
+            }
+        },
+        "required": ["pr_number"]
+    })
+});
+
+static GET_DIFF_SCHEMA: Lazy<Value> = Lazy::new(|| {
+    json!({
+        "type": "object",
+        "properties": {
+            "pr_number": {
+                "type": "integer",
+                "description": "The pull request number"
+            },
+            "owner": {
+                "type": "string",
+                "description": "Repository owner/org (optional)"
+            },
+            "repo": {
+                "type": "string",
+                "description": "Repository name (optional)"
+            }
+        },
+        "required": ["pr_number"]
+    })
+});
+
+static LIST_MERGED_PRS_SCHEMA: Lazy<Value> = Lazy::new(|| {
+    json!({
+        "type": "object",
+        "properties": {
+            "days": {
+                "type": "integer",
+                "description": "Number of days to look back"
+            }
+        },
+        "required": ["days"]
+    })
+});
+
+static GET_COMMENTS_SCHEMA: Lazy<Value> = Lazy::new(|| {
+    json!({
+        "type": "object",
+        "properties": {
+            "pr_number": {
+                "type": "integer",
+                "description": "The pull request number"
+            },
+            "owner": {
+                "type": "string",
+                "description": "Repository owner/org (optional)"
+            },
+            "repo": {
+                "type": "string",
+                "description": "Repository name (optional)"
+            }
+        },
+        "required": ["pr_number"]
+    })
+});
 
 // --- Fetch Pull Request ---
 
@@ -48,33 +127,16 @@ impl FetchPRTool {
 
 #[async_trait]
 impl Tool for FetchPRTool {
-    fn name(&self) -> String {
-        "fetch_pull_request".to_string()
+    fn name(&self) -> &str {
+        "fetch_pull_request"
     }
 
-    fn description(&self) -> String {
-        "Fetches a pull request by number. Returns PR details including title, body, description, and changed files. Can optionally specify owner/repo.".to_string()
+    fn description(&self) -> &str {
+        "Fetches a pull request by number. Returns PR details including title, body, description, and changed files. Can optionally specify owner/repo."
     }
 
-    fn schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "pr_number": {
-                    "type": "integer",
-                    "description": "The pull request number"
-                },
-                "owner": {
-                    "type": "string",
-                    "description": "Repository owner/org (optional, defaults to GITHUB_ORG env var)"
-                },
-                "repo": {
-                    "type": "string",
-                    "description": "Repository name (optional, defaults to GITHUB_REPO env var)"
-                }
-            },
-            "required": ["pr_number"]
-        })
+    fn schema(&self) -> &Value {
+        &FETCH_PR_SCHEMA
     }
 
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -146,33 +208,16 @@ impl GetDiffTool {
 
 #[async_trait]
 impl Tool for GetDiffTool {
-    fn name(&self) -> String {
-        "get_pull_request_diff".to_string()
+    fn name(&self) -> &str {
+        "get_pull_request_diff"
     }
 
-    fn description(&self) -> String {
-        "Gets the full diff for a pull request showing all code changes. Can optionally specify owner/repo.".to_string()
+    fn description(&self) -> &str {
+        "Gets the full diff for a pull request showing all code changes. Can optionally specify owner/repo."
     }
 
-    fn schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "pr_number": {
-                    "type": "integer",
-                    "description": "The pull request number"
-                },
-                "owner": {
-                    "type": "string",
-                    "description": "Repository owner/org (optional)"
-                },
-                "repo": {
-                    "type": "string",
-                    "description": "Repository name (optional)"
-                }
-            },
-            "required": ["pr_number"]
-        })
+    fn schema(&self) -> &Value {
+        &GET_DIFF_SCHEMA
     }
 
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -241,35 +286,20 @@ impl ListMergedPRsTool {
 
 #[async_trait]
 impl Tool for ListMergedPRsTool {
-    fn name(&self) -> String {
-        "list_merged_prs".to_string()
+    fn name(&self) -> &str {
+        "list_merged_prs"
     }
 
-    fn description(&self) -> String {
-        "Lists pull requests that were merged within the specified number of days.".to_string()
+    fn description(&self) -> &str {
+        "Lists pull requests that were merged within the specified number of days."
     }
 
-    fn schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "days": {
-                    "type": "integer",
-                    "description": "Number of days to look back"
-                }
-            },
-            "required": ["days"]
-        })
+    fn schema(&self) -> &Value {
+        &LIST_MERGED_PRS_SCHEMA
     }
 
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let args: ListMergedPRsArgs = serde_json::from_value(input)?;
-
-        // Calculate date threshold
-        // Note: This is a simplified implementation.
-        // Octocrab's list_prs doesn't support complex filtering directly in the builder easily for "merged > date"
-        // We might need to fetch recent PRs and filter client-side or use search API.
-        // Using search API is better: `is:pr is:merged repo:owner/repo merged:>date`
 
         let date = chrono::Utc::now() - chrono::Duration::days(args.days as i64);
         let date_str = date.format("%Y-%m-%d").to_string();
@@ -287,17 +317,12 @@ impl Tool for ListMergedPRsTool {
 
         let mut prs = Vec::new();
         for issue in page.items {
-            // Search returns issues, need to check if it's a PR (it should be due to is:pr)
-            // But issue struct in octocrab doesn't have all PR fields like merged_at directly populated the same way?
-            // Actually search returns Issue struct which has pull_request field if it is a PR.
-
-            // For simplicity, we map what we have.
             prs.push(MergedPRInfo {
                 number: issue.number,
                 title: issue.title,
                 author: issue.user.login,
-                merged_at: issue.closed_at.map(|d| d.to_rfc3339()).unwrap_or_default(), // Search result uses closed_at for merged PRs usually
-                merge_sha: "unknown".to_string(), // Search result doesn't have merge SHA
+                merged_at: issue.closed_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
+                merge_sha: "unknown".to_string(),
             });
         }
 
@@ -320,7 +345,7 @@ pub struct PRComment {
     pub author: String,
     pub body: String,
     pub created_at: String,
-    pub comment_type: String, // "review" or "issue"
+    pub comment_type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -346,33 +371,16 @@ impl GetPRCommentsTool {
 
 #[async_trait]
 impl Tool for GetPRCommentsTool {
-    fn name(&self) -> String {
-        "get_pull_request_comments".to_string()
+    fn name(&self) -> &str {
+        "get_pull_request_comments"
     }
 
-    fn description(&self) -> String {
-        "Gets all comments on a pull request including review comments and issue comments. Can optionally specify owner/repo.".to_string()
+    fn description(&self) -> &str {
+        "Gets all comments on a pull request including review comments and issue comments. Can optionally specify owner/repo."
     }
 
-    fn schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "pr_number": {
-                    "type": "integer",
-                    "description": "The pull request number"
-                },
-                "owner": {
-                    "type": "string",
-                    "description": "Repository owner/org (optional)"
-                },
-                "repo": {
-                    "type": "string",
-                    "description": "Repository name (optional)"
-                }
-            },
-            "required": ["pr_number"]
-        })
+    fn schema(&self) -> &Value {
+        &GET_COMMENTS_SCHEMA
     }
 
     async fn execute(&self, input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {

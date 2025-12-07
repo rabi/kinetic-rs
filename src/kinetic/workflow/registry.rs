@@ -17,7 +17,7 @@ impl ToolRegistry {
 
     pub async fn register(&self, tool: Arc<dyn Tool>) {
         let mut tools = self.tools.write().await;
-        tools.insert(tool.name(), tool);
+        tools.insert(tool.name().to_string(), tool);
     }
 
     pub async fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
@@ -39,34 +39,42 @@ mod tests {
     use serde_json::{json, Value};
     use std::error::Error;
 
+    use once_cell::sync::Lazy;
+
+    static MOCK_SCHEMA: Lazy<Value> = Lazy::new(|| {
+        json!({
+            "type": "object",
+            "properties": {}
+        })
+    });
+
     /// A mock tool for testing
     struct MockTool {
         name: String,
+        description: String,
     }
 
     impl MockTool {
         fn new(name: &str) -> Self {
             Self {
                 name: name.to_string(),
+                description: format!("Mock tool: {}", name),
             }
         }
     }
 
     #[async_trait]
     impl Tool for MockTool {
-        fn name(&self) -> String {
-            self.name.clone()
+        fn name(&self) -> &str {
+            &self.name
         }
 
-        fn description(&self) -> String {
-            format!("Mock tool: {}", self.name)
+        fn description(&self) -> &str {
+            &self.description
         }
 
-        fn schema(&self) -> Value {
-            json!({
-                "type": "object",
-                "properties": {}
-            })
+        fn schema(&self) -> &Value {
+            &MOCK_SCHEMA
         }
 
         async fn execute(&self, _input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
