@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Workflow normalization - converts Direct/Composite to Graph format
 
 use super::types::{DependsOn, GraphWorkflowDef, NodeDefinition, WaitMode};

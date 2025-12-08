@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: MIT
+
 //! LLM Agent - Standard LLM agent with tool calling
 //!
 //! This agent sends prompts to an LLM and handles tool calls in a loop
 //! until a text response is received.
 
-use super::Agent;
+use super::{Agent, AgentEvent};
 use crate::adk::model::{Content, Model, Part};
 use crate::adk::tool::Tool;
 use async_trait::async_trait;
@@ -169,6 +171,111 @@ impl Agent for LLMAgent {
             "Agent {} reached max turns without text response",
             self.name
         );
+        Err("Max turns reached".into())
+    }
+    async fn run_stream(
+        &self,
+        input: String,
+        tx: tokio::sync::mpsc::Sender<AgentEvent>,
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+        let mut history = vec![
+            Content {
+                role: "system".to_string(),
+                parts: vec![Part::Text(self.instruction.clone())],
+            },
+            Content {
+                role: "user".to_string(),
+                parts: vec![Part::Text(input)],
+            },
+        ];
+
+        let max_turns = 10;
+        for turn in 0..max_turns {
+            log::info!("Agent {} turn {}/{}", self.name, turn + 1, max_turns);
+            let response = self
+                .model
+                .generate_content(&history, None, Some(&self.tools))
+                .await?;
+
+            // Analyze response parts
+            let mut text_content = String::new();
+            let mut function_calls = Vec::new();
+
+            for part in &response.parts {
+                match part {
+                    Part::Text(text) => text_content.push_str(text),
+                    Part::FunctionCall { name, args, .. } => {
+                        function_calls.push((name.as_str(), args))
+                    }
+                    _ => {}
+                }
+            }
+
+            if function_calls.is_empty() {
+                // No function calls, treat text as final answer
+                if !text_content.is_empty() {
+                    let _ = tx.send(AgentEvent::Answer(text_content.clone())).await;
+                    return Ok(text_content);
+                }
+                // If both empty, it's weird, but we continue or return empty?
+                // Usually retry or return empty string? Original code returned empty string.
+                return Ok(String::new());
+            }
+
+            // Has function calls, treat text as Thought
+            if !text_content.is_empty() {
+                let _ = tx.send(AgentEvent::Thought(text_content.clone())).await;
+            }
+
+            // Execute function calls
+            let mut function_responses = Vec::with_capacity(function_calls.len());
+            for (name, args) in function_calls {
+                // Emit ToolCall event
+                let _ = tx
+                    .send(AgentEvent::ToolCall {
+                        name: name.to_string(),
+                        args: args.clone(),
+                    })
+                    .await;
+
+                let tool_response = if let Some(t) = self.get_tool(name) {
+                    match t.execute(args.clone()).await {
+                        Ok(res) => res,
+                        Err(e) => {
+                            let _ = tx
+                                .send(AgentEvent::Error(format!("Tool {} failed: {}", name, e)))
+                                .await;
+                            serde_json::json!({ "error": e.to_string() })
+                        }
+                    }
+                } else {
+                    let _ = tx
+                        .send(AgentEvent::Error(format!("Tool {} not found", name)))
+                        .await;
+                    serde_json::json!({ "error": format!("Tool {} not found", name) })
+                };
+
+                // Emit ToolResult event
+                let _ = tx
+                    .send(AgentEvent::ToolResult {
+                        name: name.to_string(),
+                        result: tool_response.clone(),
+                    })
+                    .await;
+
+                function_responses.push(Part::FunctionResponse {
+                    name: name.to_string(),
+                    response: tool_response,
+                });
+            }
+
+            history.push(response);
+            history.push(Content {
+                role: "user".to_string(),
+                parts: function_responses,
+            });
+        }
+
         Err("Max turns reached".into())
     }
 }

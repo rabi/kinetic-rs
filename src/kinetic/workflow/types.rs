@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! YAML schema types for workflow and agent definitions
 //!
 //! This module contains all the data structures used for parsing

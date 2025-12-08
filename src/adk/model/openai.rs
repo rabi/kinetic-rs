@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! OpenAI Model - ChatGPT API implementation
 
 use super::{Content, GenerationConfig, Model, Part};

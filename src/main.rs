@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use kinetic_rs::adk::agent::{Agent, LLMAgent};
@@ -36,6 +38,12 @@ enum Commands {
         /// Input to the workflow
         #[arg(short, long)]
         input: String,
+    },
+    /// Start the REST API server
+    Serve {
+        /// Port to listen on
+        #[arg(short, long, default_value_t = 3000)]
+        port: u16,
     },
 }
 
@@ -133,6 +141,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             println!("Running workflow: {}", agent.name());
             let response = agent.run(input).await?;
             println!("Response: {}", response);
+        }
+        Commands::Serve { port } => {
+            kinetic_rs::kinetic::server::serve(port).await?;
         }
     }
 

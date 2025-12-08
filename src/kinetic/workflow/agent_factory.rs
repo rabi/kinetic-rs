@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Agent factory - constructs agents from definitions
 //!
 //! This module handles the creation of Agent instances from AgentDefinition

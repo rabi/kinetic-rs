@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Typed error handling for kinetic-rs
 //!
 //! This module provides a proper error type hierarchy using thiserror,

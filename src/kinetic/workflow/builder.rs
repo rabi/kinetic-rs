@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Workflow builder - orchestrates workflow construction
 //!
 //! This module provides the high-level Builder that loads workflow definitions

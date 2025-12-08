@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Graph workflow executor
 
 use crate::adk::agent::Agent;
@@ -322,6 +324,106 @@ impl Agent for GraphAgent {
 
         // Return formatted response
         Ok(self.format_response(&state))
+    }
+
+    async fn run_stream(
+        &self,
+        input: String,
+        tx: tokio::sync::mpsc::Sender<crate::adk::agent::AgentEvent>,
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+        use crate::adk::agent::AgentEvent;
+        let mut state = WorkflowState::empty();
+        state.update("input", serde_json::Value::String(input.clone()));
+
+        let mut completed: HashSet<String> = HashSet::new();
+        let max_iterations = 100;
+
+        for iteration in 1..=max_iterations {
+            let ready = self.get_ready_nodes(&completed, &state);
+
+            if ready.is_empty() {
+                break;
+            }
+
+            log::info!(
+                "Graph iteration {}: executing {} nodes: {:?}",
+                iteration,
+                ready.len(),
+                ready
+            );
+
+            let display_names: Vec<String> = ready
+                .iter()
+                .map(|id| {
+                    let agent_name = self.nodes[*id].agent.name();
+                    format!("{} ({})", agent_name, id)
+                })
+                .collect();
+
+            let _ = tx
+                .send(AgentEvent::Log(format!(
+                    "Executing agents: {:?}",
+                    display_names
+                )))
+                .await;
+
+            for node_id in ready {
+                let node = &self.nodes[node_id];
+                let node_input = self.build_node_input(&input, node, &state);
+
+                // Create a proxy channel to intercept Answer events from sub-agents
+                let (node_tx, mut node_rx) = tokio::sync::mpsc::channel(100);
+                let main_tx = tx.clone();
+                let node_id_str = node_id.to_string();
+
+                // Spawn a task to forward events
+                let forwarder = tokio::spawn(async move {
+                    while let Some(event) = node_rx.recv().await {
+                        match event {
+                            AgentEvent::Answer(_) => {
+                                // Suppress intermediate Answer content to avoid duplicates/noise
+                                let _ = main_tx
+                                    .send(AgentEvent::Log(format!(
+                                        "Node {} finished generation.",
+                                        node_id_str
+                                    )))
+                                    .await;
+                            }
+                            ev => {
+                                let _ = main_tx.send(ev).await;
+                            }
+                        }
+                    }
+                });
+
+                // Use run_stream for the node's agent
+                match node.agent.run_stream(node_input, node_tx).await {
+                    Ok(output) => {
+                        self.apply_outputs(node, &output, &mut state);
+                        completed.insert(node_id.to_string());
+                        log::info!("Node {} completed", node_id);
+                    }
+                    Err(e) => {
+                        log::error!("Node {} failed: {}", node_id, e);
+                        let _ = tx
+                            .send(AgentEvent::Error(format!("Node {} failed: {}", node_id, e)))
+                            .await;
+                        state.update(
+                            &format!("{}.error", node_id),
+                            serde_json::Value::String(e.to_string()),
+                        );
+                        completed.insert(node_id.to_string());
+                    }
+                }
+
+                // Ensure forwarder completes (channel closed by run_stream dropping tx)
+                let _ = forwarder.await;
+            }
+        }
+
+        let response = self.format_response(&state);
+        let _ = tx.send(AgentEvent::Answer(response.clone())).await;
+        Ok(response)
     }
 }
 

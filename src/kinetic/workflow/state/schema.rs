@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! State schema definitions
 
 use serde::{Deserialize, Serialize};

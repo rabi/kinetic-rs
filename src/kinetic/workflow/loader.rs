@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Workflow loader - YAML file loading and parsing
 //!
 //! This module handles loading workflow definitions from YAML files.

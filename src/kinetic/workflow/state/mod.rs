@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! State management for graph workflows
 //!
 //! This module provides:

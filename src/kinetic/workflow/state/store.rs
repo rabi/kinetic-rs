@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Runtime state storage for workflow execution
 
 use serde_json::{Map, Value};

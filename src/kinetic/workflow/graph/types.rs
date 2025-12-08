@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Graph workflow type definitions
 //!
 //! This module defines the core types for graph-based workflow definitions.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Agent module - defines agent types for AI workflows
 //!
 //! This module provides the core Agent trait and implementations:
@@ -11,7 +13,25 @@ pub use llm::LLMAgent;
 pub use react::ReActAgent;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
+use tokio::sync::mpsc;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AgentEvent {
+    Thought(String),
+    ToolCall {
+        name: String,
+        args: serde_json::Value,
+    },
+    ToolResult {
+        name: String,
+        result: serde_json::Value,
+    },
+    Answer(String),
+    Error(String),
+    Log(String),
+}
 
 /// Core agent trait for all agent types
 #[async_trait]
@@ -21,6 +41,25 @@ pub trait Agent: Send + Sync {
 
     /// Run the agent with the given input
     async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>>;
+
+    /// Run the agent with streaming events
+    async fn run_stream(
+        &self,
+        input: String,
+        tx: mpsc::Sender<AgentEvent>,
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+        // Default implementation falls back to run()
+        match self.run(input).await {
+            Ok(res) => {
+                let _ = tx.send(AgentEvent::Answer(res.clone())).await;
+                Ok(res)
+            }
+            Err(e) => {
+                let _ = tx.send(AgentEvent::Error(e.to_string())).await;
+                Err(e)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

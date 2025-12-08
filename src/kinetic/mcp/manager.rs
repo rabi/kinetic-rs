@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 use crate::kinetic::mcp::{create_mcp_service, BasicClientHandler};
 use rmcp::service::{RoleClient, RunningService};
 use std::collections::HashMap;

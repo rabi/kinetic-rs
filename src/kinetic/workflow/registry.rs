@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 use crate::adk::tool::Tool;
 use std::collections::HashMap;
 use std::sync::Arc;

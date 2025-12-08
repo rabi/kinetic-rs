@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Condition expression evaluator
 
 use super::ast::{CompareOp, Expression, Literal};

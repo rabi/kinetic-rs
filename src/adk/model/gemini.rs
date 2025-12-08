@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Gemini Model - Google's Gemini API implementation
 
 use super::{Content, GenerationConfig, Model, Part};

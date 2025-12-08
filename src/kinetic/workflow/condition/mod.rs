@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Condition evaluation for graph workflows
 //!
 //! This module provides parsing and evaluation of `when` conditions.

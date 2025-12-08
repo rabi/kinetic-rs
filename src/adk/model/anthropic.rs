@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Anthropic Model - Claude API implementation
 
 use super::{Content, GenerationConfig, Model, Part};

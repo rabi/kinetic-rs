@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Model module - defines LLM model trait and implementations
 //!
 //! This module provides the core Model trait and shared types.

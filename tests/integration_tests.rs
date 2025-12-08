@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Integration tests for workflow loading and execution
 //!
 //! These tests verify end-to-end workflow functionality using mock components.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Graph-based workflow execution
 //!
 //! This module provides the graph workflow executor that runs

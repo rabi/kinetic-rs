@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! ReAct Agent - Reasoning + Acting pattern
 //!
 //! Implements the ReAct pattern where the agent explicitly reasons about
@@ -237,6 +239,104 @@ impl Agent for ReActAgent {
             "Reached maximum iterations. Here's what I found:\n\n{}",
             scratchpad.join("\n")
         );
+        Ok(summary)
+    }
+
+    async fn run_stream(
+        &self,
+        input: String,
+        tx: tokio::sync::mpsc::Sender<crate::adk::agent::AgentEvent>,
+    ) -> Result<String, Box<dyn Error + Send + Sync>> {
+        use crate::adk::agent::AgentEvent;
+        let system_prompt = self.build_react_system_prompt();
+        let mut scratchpad: Vec<String> = Vec::new();
+
+        for iteration in 0..self.max_iterations {
+            log::info!(
+                "ReActAgent {} iteration {}/{}",
+                self.name,
+                iteration + 1,
+                self.max_iterations
+            );
+
+            let current_prompt = self.build_prompt_with_scratchpad(&input, &scratchpad);
+            let history = vec![
+                Content {
+                    role: "system".to_string(),
+                    parts: vec![Part::Text(system_prompt.clone())],
+                },
+                Content {
+                    role: "user".to_string(),
+                    parts: vec![Part::Text(current_prompt)],
+                },
+            ];
+
+            let response = self
+                .model
+                .generate_content(&history, None, Some(&self.tools))
+                .await?;
+
+            let step = self.parse_response(&response);
+            log::debug!("ReActAgent step: {:?}", step);
+
+            match step {
+                ReActStep::Thought(thought) => {
+                    if !thought.is_empty() {
+                        scratchpad.push(format!("Thought: {}", thought));
+                        let _ = tx.send(AgentEvent::Thought(thought)).await;
+                    }
+                }
+                ReActStep::Action { tool, args } => {
+                    scratchpad.push(format!("Action: {}({})", tool, args));
+                    let _ = tx
+                        .send(AgentEvent::ToolCall {
+                            name: tool.clone(),
+                            args: args.clone(),
+                        })
+                        .await;
+
+                    // Execute tool
+                    let tool_obj = self.tools.iter().find(|t| t.name() == tool);
+                    let (observation, result_val) = if let Some(t) = tool_obj {
+                        match t.execute(args).await {
+                            Ok(result) => (
+                                serde_json::to_string_pretty(&result).unwrap_or_default(),
+                                result,
+                            ),
+                            Err(e) => (
+                                format!("Error: {}", e),
+                                serde_json::json!({"error": e.to_string()}),
+                            ),
+                        }
+                    } else {
+                        (
+                            format!("Error: Tool '{}' not found", tool),
+                            serde_json::json!({"error": "Tool not found"}),
+                        )
+                    };
+
+                    let _ = tx
+                        .send(AgentEvent::ToolResult {
+                            name: tool.clone(),
+                            result: result_val,
+                        })
+                        .await;
+                    scratchpad.push(format!("Observation: {}", observation));
+                }
+                ReActStep::FinalAnswer(answer) => {
+                    let _ = tx.send(AgentEvent::Answer(answer.clone())).await;
+                    return Ok(answer);
+                }
+            }
+        }
+
+        let summary = format!(
+            "Reached maximum iterations. Here's what I found:\n\n{}",
+            scratchpad.join("\n")
+        );
+        let _ = tx
+            .send(AgentEvent::Error("Max iterations reached".into()))
+            .await;
         Ok(summary)
     }
 }
