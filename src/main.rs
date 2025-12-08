@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use dotenv::dotenv;
 use kinetic_rs::adk::agent::{Agent, LLMAgent};
-use kinetic_rs::adk::gemini::GeminiModel;
+
 use kinetic_rs::kinetic::tools::{github, jira, search};
 use kinetic_rs::kinetic::workflow::builder::Builder;
 use kinetic_rs::kinetic::workflow::registry::ToolRegistry;
@@ -47,8 +47,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = Args::parse();
 
     match args.command {
-        Commands::Run { prompt, model } => {
-            let model = Arc::new(GeminiModel::new(model)?);
+        Commands::Run {
+            prompt,
+            model: model_name,
+        } => {
+            // Infer provider
+            let provider = std::env::var("MODEL_PROVIDER")
+                .ok()
+                .or_else(|| {
+                    if model_name.starts_with("gpt") {
+                        Some("OpenAI".to_string())
+                    } else if model_name.starts_with("claude") {
+                        Some("Anthropic".to_string())
+                    } else {
+                        Some("Gemini".to_string())
+                    }
+                })
+                .unwrap();
+
+            log::info!("Using provider: {} with model: {}", provider, model_name);
+
+            let model: Arc<dyn kinetic_rs::adk::model::Model> = match provider.as_str() {
+                "OpenAI" | "openai" => Arc::new(kinetic_rs::adk::model::openai::OpenAIModel::new(
+                    model_name,
+                )?),
+                "Anthropic" | "anthropic" => Arc::new(
+                    kinetic_rs::adk::model::anthropic::AnthropicModel::new(model_name)?,
+                ),
+                _ => Arc::new(kinetic_rs::adk::model::gemini::GeminiModel::new(
+                    model_name,
+                )?),
+            };
 
             let agent = LLMAgent::new(
                 "simple-agent".to_string(),

@@ -35,8 +35,6 @@ agent:
     1. Understand the user's request
     2. Use available tools if needed
     3. Provide a clear response
-  model:
-    kind: llm
   tools: []
 ```
 
@@ -49,8 +47,6 @@ agent:
   instructions: |
     Fetch issues from Jira using the provided tools.
     Call get_my_project_issues with the project key.
-  model:
-    kind: llm
   tools:
     - get_my_project_issues
     - get_jira_issue
@@ -61,7 +57,8 @@ agent:
 ```yaml
 model:
   kind: llm
-  # Optional: Override provider (auto-detected from model name)
+  # Optional: Override provider (auto-detected from model name or MODEL_PROVIDER env)
+  # Options: Gemini, OpenAI, Anthropic
   provider: Gemini
   # Optional: Override model (defaults to MODEL_NAME env var)
   model_name: gemini-2.0-flash
@@ -161,8 +158,8 @@ graph:
         instructions: |
           Classify the user's intent as: bug, feature, or question.
           Output only the intent type.
-        model:
-          kind: llm
+          Classify the user's intent as: bug, feature, or question.
+          Output only the intent type.
         tools: []
       outputs:
         intent: "intent"
@@ -209,8 +206,6 @@ agent:
     Research the given topic using available tools.
     Think step by step about what information you need.
     After gathering information, provide a comprehensive answer.
-  model:
-    kind: llm
   tools:
     - brave_search
     - get_jira_issue
@@ -275,19 +270,22 @@ agent:
 ### Required Variables
 
 ```bash
-# At minimum, you need an LLM API key
-GEMINI_API_KEY=your-key
+# At minimum, you need an API key for your provider
+GEMINI_API_KEY=your-gemini-key
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
 ```
 
 ### Model Configuration
 
 ```bash
 # Model selection (in order of precedence)
-MODEL_NAME=gemini-2.0-flash      # Explicit model name
+MODEL_NAME=gpt-4o                # Explicit model name
 GEMINI_MODEL=gemini-2.0-flash    # Provider-specific fallback
 
 # Provider override (usually auto-detected)
-MODEL_PROVIDER=Gemini
+# Options: Gemini, OpenAI, Anthropic
+MODEL_PROVIDER=OpenAI
 ```
 
 ### Tool Credentials
@@ -336,11 +334,8 @@ The tool isn't registered. Check:
 
 #### "Missing field `provider`"
 
-Old YAML format. The `provider` field is now optional. Just use:
-```yaml
-model:
-  kind: llm
-```
+The `model` block is now optional. You can remove it entirely and let the system use defaults (Gemini) or environment variables.
+
 
 #### Agent returns empty response
 

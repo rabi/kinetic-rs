@@ -4,7 +4,9 @@
 //! configurations, including model instantiation and tool binding.
 
 use crate::adk::agent::{Agent, LLMAgent, ReActAgent};
-use crate::adk::gemini::GeminiModel;
+use crate::adk::model::anthropic::AnthropicModel;
+use crate::adk::model::gemini::GeminiModel;
+use crate::adk::model::openai::OpenAIModel;
 use crate::adk::model::Model;
 use crate::adk::tool::Tool;
 use crate::kinetic::workflow::registry::ToolRegistry;
@@ -66,8 +68,10 @@ impl<'a> AgentFactory<'a> {
 
         match provider.as_str() {
             "Gemini" | "Google" | "gemini" | "" => Ok(Arc::new(GeminiModel::new(model_name)?)),
-            // "OpenAI" | "openai" => Ok(Arc::new(OpenAIModel::new(model_name)?)), // TODO
-            // "Anthropic" | "anthropic" => Ok(Arc::new(AnthropicModel::new(model_name)?)), // TODO
+            "OpenAI" | "openai" => Ok(Arc::new(OpenAIModel::new(model_name)?)),
+            "Anthropic" | "anthropic" | "Claude" | "claude" => {
+                Ok(Arc::new(AnthropicModel::new(model_name)?))
+            }
             _ => Err(format!("Unknown model provider: {}", provider).into()),
         }
     }

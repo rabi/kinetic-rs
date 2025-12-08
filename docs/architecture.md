@@ -35,9 +35,6 @@ Kinetic-rs is built around three core concepts:
 |------|-------------|
 | `LLMAgent` | Single agent with LLM, tools, and instructions |
 | `ReActAgent` | Explicit Thought → Action → Observation reasoning loop |
-| `SequentialAgent` | Runs sub-agents one after another, passing output as input |
-| `ParallelAgent` | Runs sub-agents concurrently, combines outputs |
-| `LoopAgent` | Repeats sub-agent until max iterations or termination |
 | `GraphAgent` | DAG-based execution with conditional branching and state |
 
 ### Execution Flow
@@ -50,7 +47,7 @@ Kinetic-rs is built around three core concepts:
                       ▼
               ┌───────────────┐
               │  LLM Provider │
-              │   (Gemini)    │
+              │ (Gemini/OpenAI)│
               └───────┬───────┘
                       │
          ┌────────────┼────────────┐
@@ -96,9 +93,15 @@ kinetic-rs/
 │   ├── main.rs              # CLI entry point
 │   ├── lib.rs               # Library exports
 │   ├── adk/                  # Agent Development Kit
-│   │   ├── agent.rs         # Agent trait and implementations
-│   │   ├── model.rs         # Model trait (LLM abstraction)
-│   │   ├── gemini.rs        # Gemini API implementation
+│   │   ├── agent/           # Agent implementations
+│   │   │   ├── mod.rs       # Agent trait
+│   │   │   ├── llm.rs       # Standard LLM agent
+│   │   │   └── react.rs     # ReAct agent
+│   │   ├── model/           # Model implementations
+│   │   │   ├── mod.rs       # Model trait
+│   │   │   ├── gemini.rs    # Gemini
+│   │   │   ├── openai.rs    # OpenAI
+│   │   │   └── anthropic.rs # Anthropic
 │   │   ├── tool.rs          # Tool trait
 │   │   └── error.rs         # Typed error handling
 │   └── kinetic/

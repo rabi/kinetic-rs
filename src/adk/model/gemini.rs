@@ -1,18 +1,25 @@
-use crate::adk::model::{Content, GenerationConfig, Model, Part};
+//! Gemini Model - Google's Gemini API implementation
+
+use super::{Content, GenerationConfig, Model, Part};
+use crate::adk::tool::Tool;
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::json;
+use std::env;
 use std::error::Error;
+use std::sync::Arc;
 
+/// Google Gemini model implementation
 pub struct GeminiModel {
     client: Client,
     api_key: String,
     model_name: String,
 }
 
-use std::env;
-
 impl GeminiModel {
+    /// Create a new GeminiModel
+    ///
+    /// Requires `GOOGLE_API_KEY` environment variable to be set.
     pub fn new(model_name: String) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let api_key = env::var("GOOGLE_API_KEY").map_err(|_| "GOOGLE_API_KEY must be set")?;
         Ok(Self {
@@ -22,9 +29,6 @@ impl GeminiModel {
         })
     }
 }
-
-use crate::adk::tool::Tool;
-use std::sync::Arc;
 
 #[async_trait]
 impl Model for GeminiModel {

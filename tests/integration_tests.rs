@@ -3,7 +3,7 @@
 //! These tests verify end-to-end workflow functionality using mock components.
 
 use async_trait::async_trait;
-use kinetic_rs::adk::agent::{Agent, LLMAgent, ParallelAgent, SequentialAgent};
+use kinetic_rs::adk::agent::{Agent, LLMAgent};
 use kinetic_rs::adk::model::{Content, GenerationConfig, Model, Part};
 use kinetic_rs::adk::tool::Tool;
 use kinetic_rs::kinetic::workflow::loader::WorkflowLoader;
@@ -112,49 +112,6 @@ impl Tool for MockTool {
 
     async fn execute(&self, _input: Value) -> Result<Value, Box<dyn Error + Send + Sync>> {
         Ok(self.response.clone())
-    }
-}
-
-/// Mock agent for testing
-struct MockAgent {
-    name: String,
-    output: String,
-}
-
-impl MockAgent {
-    fn new(name: &str, output: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            output: output.to_string(),
-        }
-    }
-}
-
-#[async_trait]
-impl Agent for MockAgent {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    async fn run(&self, _input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
-        Ok(self.output.clone())
-    }
-}
-
-/// Transform agent for testing sequential flows
-struct TransformAgent {
-    name: String,
-    suffix: String,
-}
-
-#[async_trait]
-impl Agent for TransformAgent {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    async fn run(&self, input: String) -> Result<String, Box<dyn Error + Send + Sync>> {
-        Ok(format!("{}{}", input, self.suffix))
     }
 }
 
@@ -457,66 +414,9 @@ async fn test_llm_agent_handles_tool_not_found() {
     assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn test_sequential_agent_chains_output() {
-    let agent1 = Arc::new(TransformAgent {
-        name: "step1".to_string(),
-        suffix: "-A".to_string(),
-    });
-    let agent2 = Arc::new(TransformAgent {
-        name: "step2".to_string(),
-        suffix: "-B".to_string(),
-    });
-
-    let seq = SequentialAgent::new(
-        "sequential".to_string(),
-        "test".to_string(),
-        vec![agent1, agent2],
-    );
-
-    let result = seq
-        .run("input".to_string())
-        .await
-        .expect("Sequential failed");
-    assert_eq!(result, "input-A-B");
-}
-
-#[tokio::test]
-async fn test_sequential_agent_empty_returns_input() {
-    let seq = SequentialAgent::new("empty".to_string(), "test".to_string(), vec![]);
-
-    let result = seq.run("passthrough".to_string()).await.expect("Failed");
-    assert_eq!(result, "passthrough");
-}
-
-#[tokio::test]
-async fn test_parallel_agent_combines_results() {
-    let agent1 = Arc::new(MockAgent::new("a", "result_a"));
-    let agent2 = Arc::new(MockAgent::new("b", "result_b"));
-
-    let parallel = ParallelAgent::new(
-        "parallel".to_string(),
-        "test".to_string(),
-        vec![agent1, agent2],
-    );
-
-    let result = parallel
-        .run("input".to_string())
-        .await
-        .expect("Parallel failed");
-
-    // Results are joined with separator
-    assert!(result.contains("result_a"));
-    assert!(result.contains("result_b"));
-}
-
-#[tokio::test]
-async fn test_parallel_agent_empty_returns_empty() {
-    let parallel = ParallelAgent::new("empty".to_string(), "test".to_string(), vec![]);
-
-    let result = parallel.run("input".to_string()).await.expect("Failed");
-    assert_eq!(result, "");
-}
+// Note: SequentialAgent and ParallelAgent tests removed.
+// Sequential and parallel execution is now handled by GraphAgent.
+// See kinetic::workflow::graph::executor tests for graph-based workflow tests.
 
 // ============================================================================
 // Error Type Tests

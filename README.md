@@ -11,14 +11,17 @@ A Rust framework for building AI agent workflows with support for multi-agent or
 - **MCP Support**: Connect to any MCP-compatible tool server
 - **YAML Configuration**: Define workflows declaratively with JSON Schema validation
 
-> **Note**: Currently only **Google Gemini** is supported as the LLM provider. OpenAI and Anthropic support is planned.
+> **Note**: Supported LLM providers: **Gemini**, **OpenAI**, and **Anthropic**.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Rust 1.70+
-- Gemini API key (get one at [Google AI Studio](https://aistudio.google.com/))
+- An API key for your chosen provider:
+  - [Google AI Studio](https://aistudio.google.com/) (Gemini)
+  - [OpenAI](https://platform.openai.com/)
+  - [Anthropic](https://console.anthropic.com/)
 
 ### Installation
 
@@ -34,8 +37,14 @@ Create a `.env` file:
 
 ```bash
 # LLM Configuration
+# Options: Gemini (default), OpenAI, Anthropic
+MODEL_PROVIDER=Gemini
 MODEL_NAME=gemini-2.0-flash
-GEMINI_API_KEY=your-api-key
+
+# API Keys (set the one you are using)
+GOOGLE_API_KEY=your-gemini-key
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
 
 # GitHub (for PR tools)
 GITHUB_TOKEN=ghp_xxxxx
@@ -82,8 +91,7 @@ agent:
   description: "Does something useful"
   instructions: |
     You are a helpful assistant.
-  model:
-    kind: llm
+    You are a helpful assistant.
   tools:
     - tool_name
 ```
@@ -122,8 +130,6 @@ graph:
         name: Classifier
         description: "Determines user intent"
         instructions: "Classify the intent as 'bug', 'feature', or 'question'"
-        model:
-          kind: llm
         tools: []
       outputs:
         intent: "intent"
@@ -157,8 +163,6 @@ agent:
   instructions: |
     Research the given topic using available tools.
     Think step by step about what information you need.
-  model:
-    kind: llm
   tools:
     - brave_search
     - get_jira_issue
@@ -170,10 +174,7 @@ agent:
 |------|-------------|----------|
 | `LLMAgent` | Standard agent with LLM and tools | Most workflows |
 | `ReActAgent` | Explicit reasoning loop | Complex multi-step tasks |
-| `SequentialAgent` | Runs sub-agents in order | Pipelines |
-| `ParallelAgent` | Runs sub-agents concurrently | Independent tasks |
-| `LoopAgent` | Iterates until done | Refinement loops |
-| `GraphAgent` | DAG-based execution | Conditional workflows |
+| `GraphAgent` | DAG-based execution | Conditional workflows, orchestration |
 
 ## Examples
 
@@ -192,11 +193,18 @@ agent:
 kinetic-rs/
 ├── src/
 │   ├── adk/                  # Agent Development Kit
-│   │   ├── agent.rs          # Agent trait and implementations
-│   │   ├── model.rs          # LLM abstraction
+│   ├── adk/                  # Agent Development Kit
+│   │   ├── agent/            # Agent implementations
+│   │   │   ├── mod.rs        # Agent trait
+│   │   │   ├── llm.rs        # Standard LLMAgent
+│   │   │   └── react.rs      # ReActAgent
+│   │   ├── model/            # Model implementations
+│   │   │   ├── mod.rs        # Model trait
+│   │   │   ├── gemini.rs     # Gemini support
+│   │   │   ├── openai.rs     # OpenAI support
+│   │   │   └── anthropic.rs  # Anthropic support
 │   │   ├── tool.rs           # Tool trait
 │   │   ├── error.rs          # Typed error handling
-│   │   └── gemini.rs         # Gemini API
 │   └── kinetic/
 │       ├── workflow/
 │       │   ├── graph/        # Graph workflow execution

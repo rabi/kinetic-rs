@@ -102,6 +102,7 @@ pub struct AgentDefinition {
     pub instructions: String,
     /// Executor type: "default" (turn-based), "react" (Thought-Action-Observation), "cot" (Chain-of-Thought)
     pub executor: Option<String>,
+    #[serde(default)]
     pub model: ModelDefinition,
     pub tools: Vec<String>,
     pub memory: Option<MemoryDefinition>,
@@ -129,7 +130,7 @@ pub enum AgentConfig {
 }
 
 /// Model configuration
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ModelDefinition {
     /// Provider is optional - can be inferred from model_name or MODEL_PROVIDER env var
     pub provider: Option<String>,
